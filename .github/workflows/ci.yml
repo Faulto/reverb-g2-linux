@@ -49,10 +49,9 @@ jobs:
         run: |
           git clone --filter=blob:none https://github.com/AshishKumar4/monado-wmr.git /tmp/monado-wmr
           git -C /tmp/monado-wmr checkout --detach 9893ba4cb0dabe45e2383c2270fa0f3d4ed79ab2
-          for patch in patches/monado-wmr/*.patch; do
-            git -C /tmp/monado-wmr apply --check "$GITHUB_WORKSPACE/$patch"
-            git -C /tmp/monado-wmr apply "$GITHUB_WORKSPACE/$patch"
-          done
+          source scripts/setup-index-controllers.sh
+          apply_verified_series Monado /tmp/monado-wmr "$GITHUB_WORKSPACE/patches/monado-wmr"
+          apply_verified_series Monado /tmp/monado-wmr "$GITHUB_WORKSPACE/patches/monado-wmr"
 
       - name: Compile repository C and C++ utilities
         run: |
@@ -66,10 +65,9 @@ jobs:
         run: |
           git clone --filter=blob:none https://gitlab.freedesktop.org/mateosss/basalt.git /tmp/basalt
           git -C /tmp/basalt checkout --detach df6e970c8da7636eb401a09e3317fbeaaf829b9a
-          for patch in patches/basalt-wmr/*.patch; do
-            git -C /tmp/basalt apply --check "$GITHUB_WORKSPACE/$patch"
-            git -C /tmp/basalt apply "$GITHUB_WORKSPACE/$patch"
-          done
+          source scripts/setup-index-controllers.sh
+          apply_verified_series Basalt /tmp/basalt "$GITHUB_WORKSPACE/patches/basalt-wmr"
+          apply_verified_series Basalt /tmp/basalt "$GITHUB_WORKSPACE/patches/basalt-wmr"
 
       - name: Verify NVIDIA patch series against tested releases
         run: |
