@@ -91,7 +91,18 @@ else
     MONADO="${DETECTED_MONADO_DIR:-$VR_ROOT/monado-wmr}"
 fi
 SPACECAL_DRIVER="${SPACECAL_DRIVER_DIR:-${DETECTED_SPACECAL_DRIVER:-${XDG_DATA_HOME:-$HOME/.local/share}/SteamVR/drivers/01spacecalibrator}}"
-BASALT_LIB="${VIT_SYSTEM_LIBRARY_PATH:-${BASALT_DIR:-$VR_ROOT/basalt-wmr}/build/libbasalt.so}"
+if [ -n "${VIT_SYSTEM_LIBRARY_PATH:-}" ]; then
+    BASALT_LIB="$VIT_SYSTEM_LIBRARY_PATH"
+elif [ -n "${BASALT_DIR:-}" ]; then
+    BASALT_LIB="$BASALT_DIR/build/libbasalt.so"
+elif [ -f "$VR_ROOT/basalt-wmr/build/libbasalt.so" ]; then
+    BASALT_LIB="$VR_ROOT/basalt-wmr/build/libbasalt.so"
+elif [ -f "$VR_ROOT/basalt/build/libbasalt.so" ]; then
+    # Migration path for installations made before the public repo used basalt-wmr.
+    BASALT_LIB="$VR_ROOT/basalt/build/libbasalt.so"
+else
+    BASALT_LIB="$VR_ROOT/basalt-wmr/build/libbasalt.so"
+fi
 MONADO_DRIVER="$MONADO/build/steamvr-monado"
 SPACECAL="$SPACECAL_DRIVER/bin/linux64/space-calibrator"
 VRPATHREG="$STEAMVR/bin/vrpathreg.sh"

@@ -211,3 +211,16 @@ USB check and wake the headset before changing the volume.
 Launcher logs are under `~/.cache/reverb-g2`. SteamVR's OpenVR log folder is discovered with
 `vrpathreg.sh`, so it may not be where a generic guide expects. Run `diagnose` to print the
 resolved paths and recent errors.
+
+## `libbasalt.so` is missing
+
+Run:
+
+```bash
+./scripts/beat-saber-index.sh paths
+```
+
+The launcher accepts both the current `~/vr/basalt-wmr/build/libbasalt.so` location and the
+older `~/vr/basalt/build/libbasalt.so` layout. If neither file exists, build the pinned stack
+with `./scripts/setup-index-controllers.sh all`. For a custom source folder, set
+`BASALT_DIR=/path/to/basalt`.
