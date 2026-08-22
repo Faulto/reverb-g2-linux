@@ -39,6 +39,31 @@ tracking experiments remain in the original
   overlay.
 - Exposes the common actions and tracking settings through a desktop control panel.
 
+## Problems and mitigations
+
+These are the failures encountered on real hardware and the protections now built into the
+supported workflow.
+
+| Problem | What happens | Mitigation in this project |
+|---|---|---|
+| NVIDIA 90 Hz is black or flickers | The G2 leaves EDID color depth undefined. The tested NVIDIA drivers negotiated 6 bpc and could not drive the native mode correctly. | The version-selected series from patches `0001`–`0005` fixes the VR display path, G2 link configuration, and 8-bpc range. The patch manager validates, applies, rebuilds, and audits it. |
+| Patched source but an old module still boots | A driver update or stale initramfs can leave `/usr/src`, DKMS, the loaded module, and the boot image out of sync. | The manager compares running and installed versions, rebuilds DKMS even when source is already patched, refreshes the detected boot-image system, and reports pending reboots. |
+| The headset appears in `lsusb` but tracking or the display fails | The cable exposes separate USB 2 and SuperSpeed branches. One half can enumerate at only 480 Mb/s while the rest looks present. | Preflight checks every required G2 function, negotiated speed, authorization, power policy, device access, and xHCI path. Startup stops before SteamVR when a required branch is missing or slow. |
+| A script works only on one GPU port or Steam library | DRM card numbers, DisplayPort connectors, Steam libraries, PipeWire nodes, and hidraw numbers change across machines and reconnects. | The launcher discovers the G2 by EDID and resolves Steam, SteamVR, audio, Watchman radios, logs, and source trees dynamically. Overrides remain available for unusual layouts. |
+| Tracking initializes while the headset is on the floor | The initial Basalt world and saved SteamVR origin can start tilted, upside down, or at the wrong height. | Hardware and display checks run first. A confirmation dialog and configurable countdown then give the user time to stand at play-centre before tracking initializes. |
+| Head tracking jumps, flies away, changes height, or triggers a grey screen | A bad SLAM pose can contain a discontinuity, impossible speed, non-finite value, or runaway room position. | Patched Monado rejects unsafe VIT input, holds the last safe pose, resets Basalt after sustained corruption, and enforces a 5×5 m horizontal envelope from the floor to 40 cm above standing eye height. |
+| The view feels delayed or stationary text jitters | Full pose smoothing reduces noise but rotational latency can cause discomfort; no smoothing leaves visible rest jitter. | Smoothing and prediction are separate settings. The tested baseline keeps smoothing off, uses dead-reckoning motion prediction, and forwards adjustable angular velocity to SteamVR. Position-only smoothing is available without filtering rotation. |
+| Floor height drifts during a session | Moderate visual-tracking error can move the HMD vertically even though Lighthouse controller space remains correct. | Every startup creates a validated standing origin. Optional still-and-level recovery glides moderate height error back toward the configured eye height without rewriting Lighthouse coordinates, and the floor can be recaptured without rebuilding the stack. |
+| Index controllers track but are offset from the headset | Monado and Lighthouse use different coordinate systems, or a stale/duplicate Space Calibrator process restores the wrong transform. | The launcher starts and checks one Space Calibrator instance, preserves its profile, validates controller and floor poses, and provides a ready check before games launch. |
+| One Index controller floats away or disappears | Watchman radio access, USB interference, or poor dongle placement can affect one controller while its LED remains on. | Host preflight requires two accessible receiver radios and reports missing versus permission-denied devices separately. The troubleshooting guide covers receiver separation and extension-lead placement. |
+| SteamVR starts but cannot acquire the G2 display | Low VRAM, a stale compositor state, or a Wayland DRM-lease failure can leave SteamVR running without direct mode. | Startup requires the native 4320×2160 mode and confirms direct mode before continuing. It distinguishes Monado device initialization from compositor/lease failure and leaves the relevant logs visible. |
+| Opening SteamVR's desktop crashes Steam | Desktop capture and Remote Play hosting triggered Steam's `CDesktopStreamT` crash on the verified machine. | The launcher starts Steam with PipeWire support, warns when Remote Play hosting is enabled, and launches the BSManager-managed game directly so the VR desktop is unnecessary. |
+| Beat Saber is stuck in a map or its controllers remain on the floor | The game or Proton process can fail while SteamVR, tracking, and calibration are still healthy. | `restart-modded` restarts only the managed game, retaining SteamVR, the standing origin, and Space Calibrator state. |
+| SteamVR's headset volume slider does nothing | The G2 USB codec is exposed through PipeWire but is not always controlled correctly by the dashboard. | The launcher discovers the G2 sink and changes its volume directly with `pactl`; the same controls are available from the desktop panel. |
+
+[Troubleshooting](docs/troubleshooting.md) provides the commands and recovery sequence for
+each class of failure.
+
 ## Current limits
 
 This is not yet verified on every Linux, GPU, desktop, or G2 cable revision. The complete
