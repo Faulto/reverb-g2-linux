@@ -1,0 +1,49 @@
+From 10c39ddee0e8695977403f4005e999287f7bd0e4 Mon Sep 17 00:00:00 2001
+From: Ashish Kumar Singh <ashishkmr472@gmail.com>
+Date: Thu, 21 May 2026 14:25:26 -0400
+Subject: [PATCH 3/3] dp: force maximum link config for the HP Reverb G2 (EDID
+ ManufID 0x0E22, ProductID 0x36C1)
+
+The G2 trains at 2 DP lanes instead of HBR3 x4 without a workaround; add a
+forceMaxLinkConfig entry keyed on its EDID ManufID and ProductID, matching
+NVIDIA's existing per-device WAR entries. NVIDIA bug 5923212.
+
+NVIDIA's DP parser reads EDID manufacturer bytes 8-9 in little-endian order, so
+the raw HPN bytes 22 0e are compared as 0x0E22, not the conventional big-endian
+EISA value 0x220E. Gate on ProductID 0x36C1 as well so ordinary HP monitors are
+not affected.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+---
+ src/common/displayport/src/dp_wardatabase.cpp | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/common/displayport/src/dp_wardatabase.cpp b/src/common/displayport/src/dp_wardatabase.cpp
+index 74daf1e7..a075e8ed 100644
+--- a/src/common/displayport/src/dp_wardatabase.cpp
++++ b/src/common/displayport/src/dp_wardatabase.cpp
+@@ -547,6 +547,22 @@ void Edid::applyEdidWorkArounds(NvU32 warFlag, const DpMonitorDenylistData *pDen
+             }
+             break;
+ 
++        // HP Reverb G2 VR headset.
++        // getManufId() reads EDID bytes 8-9 little-endian:
++        // raw HPN bytes 22 0e -> ManufID 0x0E22.
++        // Workaround for NVIDIA bug 5923212: the G2 trains at 2 DP lanes
++        // instead of 4 on NVIDIA Linux without this WAR, capping it to
++        // 2880x1440@60. Forcing max link config (HBR3 x4) is the first step
++        // toward enabling 4320x2160 native modes.
++        case 0x0E22:
++            if (ProductID == 0x36C1)
++            {
++                this->WARFlags.forceMaxLinkConfig = true;
++                DP_PRINTF(DP_NOTICE, "DP-WAR> Force maximum link config for HP Reverb G2.");
++                DP_PRINTF(DP_NOTICE, "DP-WAR>   workaround for NVIDIA bug 5923212");
++            }
++            break;
++
+         // CMN
+         case 0xAE0D:
+             if (ProductID == 0x1747)
+-- 
+2.53.0

@@ -1,0 +1,49 @@
+diff --git a/src/xrt/drivers/wmr/wmr_hmd.c b/src/xrt/drivers/wmr/wmr_hmd.c
+index 0b3d2ef9e..8dd6a24bc 100644
+--- a/src/xrt/drivers/wmr/wmr_hmd.c
++++ b/src/xrt/drivers/wmr/wmr_hmd.c
+@@ -81,6 +81,16 @@ DEBUG_GET_ONCE_NUM_OPTION(sleep_seconds, "WMR_DISPLAY_INIT_SLEEP_SECONDS", 4)
+ //! Specifies whether the user wants to use the hand tracker.
+ DEBUG_GET_ONCE_BOOL_OPTION(wmr_handtracking, "WMR_HANDTRACKING", true)
+ 
++//! Forward the SLAM/IMU angular velocity with the displayed head pose so an
++//! external runtime can extrapolate from the query time to photon time.
++DEBUG_GET_ONCE_BOOL_OPTION(wmr_head_pose_angular_velocity, "WMR_HEAD_POSE_ANGULAR_VELOCITY", false)
++
++//! Scale only the angular velocity exported with the displayed head pose. Basalt/Monado's
++//! internal pose prediction is untouched; this tunes SteamVR's final photon-time extrapolation.
++DEBUG_GET_ONCE_FLOAT_OPTION(wmr_head_pose_angular_velocity_percent,
++                            "WMR_HEAD_POSE_ANGULAR_VELOCITY_PERCENT",
++                            100.0f)
++
+ #ifdef XRT_FEATURE_SLAM
+ //! Whether to submit samples to the SLAM tracker from the start.
+ DEBUG_GET_ONCE_OPTION(slam_submit_from_start, "SLAM_SUBMIT_FROM_START", NULL)
+@@ -1226,12 +1236,24 @@ wmr_hmd_get_slam_tracked_pose(struct xrt_device *xdev,
+ 	if (name == XRT_INPUT_GENERIC_TRACKER_POSE) {
+ 		// The raw-tracker consumer (constellation vision + its ESKF world re-anchor detector,
+ 		// t_constellation_tracking.c) gets the honest velocity validity. The presentation
+-		// consumer (GENERIC_HEAD_POSE -> the SteamVR seam) keeps pose-only flags: forwarding
+-		// head velocities into the runtime's photon-time extrapolation is the L3 decision,
+-		// deliberately not taken here.
++		// consumer can opt in separately below so this remains an explicit presentation policy.
+ 		flags = (enum xrt_space_relation_flags)(
+ 		    flags | (slam_flags & (XRT_SPACE_RELATION_LINEAR_VELOCITY_VALID_BIT |
+ 		                           XRT_SPACE_RELATION_ANGULAR_VELOCITY_VALID_BIT)));
++	} else if (debug_get_bool_option_wmr_head_pose_angular_velocity()) {
++		// SteamVR queries a pose predicted to "now", then extrapolates it to the panel's
++		// Prop_SecondsFromVsyncToPhotons_Float. Without this flag apply_pose() sends a zero
++		// angular velocity, leaving roughly one photon-time interval of rotational latency.
++		// Keep linear velocity disabled for this first, conservative A/B: rotational latency is
++		// the comfort-critical signal, while SLAM linear velocity can add visible world swim.
++		float percent = debug_get_float_option_wmr_head_pose_angular_velocity_percent();
++		percent = percent < 0.0f ? 0.0f : (percent > 150.0f ? 150.0f : percent);
++		float scale = percent * 0.01f;
++		out_relation->angular_velocity.x *= scale;
++		out_relation->angular_velocity.y *= scale;
++		out_relation->angular_velocity.z *= scale;
++		flags = (enum xrt_space_relation_flags)(
++		    flags | (slam_flags & XRT_SPACE_RELATION_ANGULAR_VELOCITY_VALID_BIT));
+ 	}
+ 	out_relation->relation_flags = flags;
+ }

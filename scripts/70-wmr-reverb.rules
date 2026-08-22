@@ -1,0 +1,26 @@
+# HP Reverb G2 / Windows Mixed Reality. Grant the active desktop session
+# read/write access to only the G2's exact hidraw and raw USB devices. Arch does
+# not create Debian's plugdev group, so TAG+="uaccess" is the portable systemd
+# mechanism. libusb needs write access in order to claim the HoloLens camera's
+# vendor interface; mode 0664 is insufficient even though descriptors are read.
+
+# HP QHMD display/companion board.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0580", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="03f0", ATTR{idProduct}=="0580", MODE="0660", TAG+="uaccess"
+
+# Microsoft HoloLens sensors: IMU and four tracking cameras.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="045e", ATTRS{idProduct}=="0659", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="0659", MODE="0660", TAG+="uaccess"
+
+# HP Reverb G2 motion controllers connected through host Bluetooth. With
+# BlueZ's default UserspaceHID mode these are virtual UHID devices, so they do
+# not have USB idVendor/idProduct attributes; match the exact HID bus/VID/PID
+# parent name instead (0005 = Bluetooth, 045e:066a = G2 controller).
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:045E:066A.*", MODE="0660", TAG+="uaccess"
+
+# Cypress USB 2 and USB 3 halves of the G2 v1 cable/hub. Rev2 cables may omit
+# these IDs; the functional endpoint rules above still apply.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="6504", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="6506", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6504", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6506", MODE="0660", TAG+="uaccess"

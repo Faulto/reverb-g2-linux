@@ -1,0 +1,56 @@
+diff --git a/src/vit/vit_tracker.cpp b/src/vit/vit_tracker.cpp
+index d85e81d..f1486e0 100644
+--- a/src/vit/vit_tracker.cpp
++++ b/src/vit/vit_tracker.cpp
+@@ -55,6 +55,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #include <sophus/se3.hpp>
+ 
+ #include <cstdio>
++#include <cstdlib>
+ #include <memory>
+ #include <string>
+ #include <thread>
+@@ -157,6 +158,28 @@ struct Tracker::Implementation {
+ 
+   OpticalFlowInput::Ptr partial_frame;
+ 
++  void apply_runtime_overrides() {
++    const char* raw_recall = std::getenv("BASALT_FEATURE_RECALL");
++    if (raw_recall == nullptr || raw_recall[0] == '\0') return;
++
++    const string mode(raw_recall);
++    if (mode == "off" || mode == "false" || mode == "0") {
++      vio_config.optical_flow_recall_enable = false;
++      vio_config.optical_flow_recall_all_cams = false;
++    } else if (mode == "front" || mode == "true" || mode == "1") {
++      vio_config.optical_flow_recall_enable = true;
++      vio_config.optical_flow_recall_all_cams = false;
++    } else if (mode == "all") {
++      vio_config.optical_flow_recall_enable = true;
++      vio_config.optical_flow_recall_all_cams = true;
++    } else {
++      std::cerr << "Ignoring invalid BASALT_FEATURE_RECALL='" << mode << "'\n";
++      return;
++    }
++    std::cout << "Basalt landmark recall: " << mode
++              << " (experimental; recalled patches persist for this tracker session)\n";
++  }
++
+   explicit Implementation(const vit::Config *config) : show_gui(config->show_ui), cam_count(config->cam_count) {
+     cout << "Basalt with cam_count=" << cam_count << ", show_gui=" << show_gui << "\n";
+ 
+@@ -170,12 +193,14 @@ struct Tracker::Implementation {
+ 
+     if (config->file == nullptr) {
+       // For the pipeline to work now, the user will need to use add_cam/imu_calibration
++      apply_runtime_overrides();
+       return;
+     }
+ 
+     load_unified_config(config->file);
+ 
+     vio_config.load(config_path);
++    apply_runtime_overrides();
+     load_calibration_data(cam_calib_path);
+ 
+     monado_out_state_queue.set_capacity(32);

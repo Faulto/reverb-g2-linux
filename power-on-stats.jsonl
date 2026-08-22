@@ -1,0 +1,48 @@
+{"iso_time": "2026-08-09T21:14:33-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "El cable est\u00e1 reconectando solo sin llegar a agarrar bien.", "part": null}
+{"iso_time": "2026-08-09T21:42:21-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "El cable est\u00e1 reconectando solo sin llegar a agarrar bien.", "part": null}
+{"iso_time": "2026-08-09T21:59:24-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "El cable est\u00e1 reconectando solo sin llegar a agarrar bien.", "part": null}
+{"iso_time": "2026-08-09T22:27:35-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Nada responde y no hay reintentos -- el conector puede no estar bien asentado.", "part": null}
+{"iso_time": "2026-08-09T23:12:09-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true}
+{"iso_time": "2026-08-09T23:14:41-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true}
+{"iso_time": "2026-08-09T23:30:37-0300", "verdict": "TE NECESITO", "step_reached": 5, "reason": "Falta prender uno o los dos controles.", "part": null}
+{"iso_time": "2026-08-09T23:44:50-0300", "verdict": "TE NECESITO", "step_reached": 5, "reason": "Falta prender uno o los dos controles.", "part": null}
+{"iso_time": "2026-08-09T23:55:47-0300", "verdict": "TE NECESITO", "step_reached": 5, "reason": "Falta prender uno o los dos controles.", "part": null}
+{"iso_time": "2026-08-10T00:04:58-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false}
+{"iso_time": "2026-08-10T00:19:46-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:24:48-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:28:46-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:36:28-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:42:43-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:45:37-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T00:50:25-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T01:06:08-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false}
+{"iso_time": "2026-08-10T01:29:48-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true}
+{"iso_time": "2026-08-10T13:04:56-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false}
+{"iso_time": "2026-08-10T14:02:34-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false}
+{"iso_time": "2026-08-10T14:40:23-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": true}
+{"iso_time": "2026-08-10T14:47:08-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": true}
+{"iso_time": "2026-08-11T03:15:39-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true, "gamepad_present": true}
+{"iso_time": "2026-08-12T00:30:46-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": true}
+{"iso_time": "2026-08-12T06:52:30-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true, "gamepad_present": true}
+{"iso_time": "2026-08-12T08:54:10-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true, "gamepad_present": true}
+{"iso_time": "2026-08-12T19:15:56-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": true}
+{"iso_time": "2026-08-13T12:26:49-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "El cable est\u00e1 reconectando solo sin llegar a agarrar bien.", "part": null}
+{"iso_time": "2026-08-15T10:26:30-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Faltan piezas del casco y la reconexi\u00f3n no lleg\u00f3 a tiempo.", "part": null}
+{"iso_time": "2026-08-15T21:46:55-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-16T01:57:54-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-16T03:04:51-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true, "gamepad_present": false}
+{"iso_time": "2026-08-16T03:20:11-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Faltan piezas del casco y la reconexi\u00f3n no lleg\u00f3 a tiempo.", "part": null}
+{"iso_time": "2026-08-16T18:32:44-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": true, "gamepad_present": false}
+{"iso_time": "2026-08-17T04:04:26-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-19T00:55:50-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-19T13:20:28-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-19T18:36:03-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-19T22:45:20-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-20T02:20:22-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-20T05:41:30-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Faltan piezas del casco y la reconexi\u00f3n no lleg\u00f3 a tiempo.", "part": null}
+{"iso_time": "2026-08-20T06:23:42-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Faltan piezas del casco y la reconexi\u00f3n no lleg\u00f3 a tiempo.", "part": null}
+{"iso_time": "2026-08-20T19:32:43-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-20T21:18:35-0300", "verdict": "TE NECESITO", "step_reached": 1, "reason": "Faltan piezas del casco y la reconexi\u00f3n no lleg\u00f3 a tiempo.", "part": null}
+{"iso_time": "2026-08-20T21:49:16-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-21T15:53:47-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": false}
+{"iso_time": "2026-08-21T19:01:47-0300", "verdict": "LISTO", "step_reached": 5, "mode": "1", "tracking": "3dof", "pre_login": true, "controllers_ok": false, "gamepad_present": true}

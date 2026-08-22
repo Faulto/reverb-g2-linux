@@ -1,0 +1,92 @@
+From: reverb-g2 contributors <noreply@localhost>
+Subject: [PATCH] slam: expose separate One Euro filter controls
+
+Keep smoothing disabled by default, allow position-only filtering to reduce
+stationary translation jitter without adding rotational latency, and provide
+lighter configurable defaults for an opt-in full-pose mode.
+---
+ src/xrt/auxiliary/tracking/t_tracker_slam.cpp | 43 ++++++++++++++++++++++-----
+ 1 file changed, 35 insertions(+), 8 deletions(-)
+
+diff --git a/src/xrt/auxiliary/tracking/t_tracker_slam.cpp b/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
+index 6b79d9c0e..5bbea4bd4 100644
+--- a/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
++++ b/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
+@@ -341,11 +341,16 @@ struct TrackerSlam
+ 
+ 		// One euro filter
+ 		bool use_one_euro_filter = false;
++		bool use_one_euro_position_filter = false;
++		bool use_one_euro_orientation_filter = false;
+ 		m_filter_euro_vec3 pos_oe;     //!< One euro position filter
+ 		m_filter_euro_quat rot_oe;     //!< One euro rotation filter
+-		const float min_cutoff = M_PI; //!< Default minimum cutoff frequency
+-		const float min_dcutoff = 1;   //!< Default minimum cutoff frequency for the derivative
+-		const float beta = 0.16;       //!< Default speed coefficient
++		float pos_min_cutoff = 8.0f;   //!< Light rest smoothing without the old low-cutoff lag
++		float pos_min_dcutoff = 1.0f;
++		float pos_beta = 2.0f;
++		float rot_min_cutoff = 12.0f;  //!< Orientation filtering is opt-in and deliberately lighter
++		float rot_min_dcutoff = 1.0f;
++		float rot_beta = 3.0f;
+ 
+ 	} filter;
+ 
+@@ -1020,12 +1025,15 @@ filter_pose(TrackerSlam &t, timepoint_ns when_ns, struct xrt_space_relation *out
+ 		*out_relation = last;
+ 	}
+ 
+-	if (t.filter.use_one_euro_filter) {
++	if (t.filter.use_one_euro_filter || t.filter.use_one_euro_position_filter ||
++	    t.filter.use_one_euro_orientation_filter) {
+ 		xrt_pose &p = out_relation->pose;
+-		if (out_relation->relation_flags & XRT_SPACE_RELATION_POSITION_VALID_BIT) {
++		if ((t.filter.use_one_euro_filter || t.filter.use_one_euro_position_filter) &&
++		    (out_relation->relation_flags & XRT_SPACE_RELATION_POSITION_VALID_BIT)) {
+ 			m_filter_euro_vec3_run(&t.filter.pos_oe, when_ns, &p.position, &p.position);
+ 		}
+-		if (out_relation->relation_flags & XRT_SPACE_RELATION_ORIENTATION_VALID_BIT) {
++		if ((t.filter.use_one_euro_filter || t.filter.use_one_euro_orientation_filter) &&
++		    (out_relation->relation_flags & XRT_SPACE_RELATION_ORIENTATION_VALID_BIT)) {
+ 			m_filter_euro_quat_run(&t.filter.rot_oe, when_ns, &p.orientation, &p.orientation);
+ 		}
+ 	}
+@@ -1072,6 +1080,8 @@ setup_ui(TrackerSlam &t)
+ 	u_var_add_bool(&t, &t.filter.use_exponential_smoothing_filter, "Enable exponential smoothing filter");
+ 	u_var_add_f32(&t, &t.filter.alpha, "Smoothing factor");
+ 	u_var_add_bool(&t, &t.filter.use_one_euro_filter, "Enable one euro filter");
++	u_var_add_bool(&t, &t.filter.use_one_euro_position_filter, "Enable one euro position filter");
++	u_var_add_bool(&t, &t.filter.use_one_euro_orientation_filter, "Enable one euro orientation filter");
+ 	u_var_add_f32(&t, &t.filter.pos_oe.base.fc_min, "Position minimum cutoff");
+ 	u_var_add_f32(&t, &t.filter.pos_oe.base.beta, "Position beta speed");
+ 	u_var_add_f32(&t, &t.filter.pos_oe.base.fc_min_d, "Position minimum delta cutoff");
+@@ -1668,8 +1678,25 @@ t_slam_create(struct xrt_frame_context *xfctx,
+ 
+ 	t.pred_type = config->prediction;
+ 
+-	m_filter_euro_vec3_init(&t.filter.pos_oe, t.filter.min_cutoff, t.filter.min_dcutoff, t.filter.beta);
+-	m_filter_euro_quat_init(&t.filter.rot_oe, t.filter.min_cutoff, t.filter.min_dcutoff, t.filter.beta);
++	t.filter.use_one_euro_position_filter = debug_get_bool_option("SLAM_ONE_EURO_POSITION", false);
++	t.filter.use_one_euro_orientation_filter = debug_get_bool_option("SLAM_ONE_EURO_ORIENTATION", false);
++	t.filter.pos_min_cutoff = debug_get_float_option("SLAM_ONE_EURO_POSITION_MIN_CUTOFF", t.filter.pos_min_cutoff);
++	t.filter.pos_min_dcutoff =
++	    debug_get_float_option("SLAM_ONE_EURO_POSITION_MIN_DCUTOFF", t.filter.pos_min_dcutoff);
++	t.filter.pos_beta = debug_get_float_option("SLAM_ONE_EURO_POSITION_BETA", t.filter.pos_beta);
++	t.filter.rot_min_cutoff =
++	    debug_get_float_option("SLAM_ONE_EURO_ORIENTATION_MIN_CUTOFF", t.filter.rot_min_cutoff);
++	t.filter.rot_min_dcutoff =
++	    debug_get_float_option("SLAM_ONE_EURO_ORIENTATION_MIN_DCUTOFF", t.filter.rot_min_dcutoff);
++	t.filter.rot_beta = debug_get_float_option("SLAM_ONE_EURO_ORIENTATION_BETA", t.filter.rot_beta);
++
++	SLAM_INFO("One Euro smoothing: position=%s (cutoff %.2f, beta %.2f), orientation=%s (cutoff %.2f, beta %.2f)",
++	          t.filter.use_one_euro_position_filter ? "on" : "off", t.filter.pos_min_cutoff, t.filter.pos_beta,
++	          t.filter.use_one_euro_orientation_filter ? "on" : "off", t.filter.rot_min_cutoff, t.filter.rot_beta);
++	m_filter_euro_vec3_init(
++	    &t.filter.pos_oe, t.filter.pos_min_cutoff, t.filter.pos_min_dcutoff, t.filter.pos_beta);
++	m_filter_euro_quat_init(
++	    &t.filter.rot_oe, t.filter.rot_min_cutoff, t.filter.rot_min_dcutoff, t.filter.rot_beta);
+ 
+ 	t.gt.trajectory = new Trajectory{};
+ 
+-- 
+2.51.0

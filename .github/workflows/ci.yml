@@ -1,0 +1,102 @@
+name: repository checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-and-patches:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install static checker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            shellcheck build-essential pkg-config \
+            libwayland-dev libvulkan-dev wayland-protocols
+
+      - name: Public-release audit
+        env:
+          G2_PRIVATE_PATTERNS: ${{ secrets.G2_PRIVATE_PATTERNS }}
+        run: |
+          if [ -n "$G2_PRIVATE_PATTERNS" ]; then
+            printf '%s\n' "$G2_PRIVATE_PATTERNS" > scripts/.private-patterns
+          fi
+          ./scripts/check-publishable.py
+
+      - name: ShellCheck maintained entry points
+        run: |
+          shellcheck \
+            scripts/setup-index-controllers.sh \
+            scripts/beat-saber-index.sh \
+            scripts/g2-preflight.sh \
+            scripts/g2-control-panel.sh \
+            scripts/install-control-panel.sh \
+            scripts/nvidia-g2-patch-manager.sh \
+            scripts/sync-nvidia-initramfs.sh \
+            scripts/bootstrap-lab.sh
+
+      - name: Verify Monado patch series against pinned source
+        run: |
+          git clone --filter=blob:none https://github.com/AshishKumar4/monado-wmr.git /tmp/monado-wmr
+          git -C /tmp/monado-wmr checkout --detach 9893ba4cb0dabe45e2383c2270fa0f3d4ed79ab2
+          for patch in patches/monado-wmr/*.patch; do
+            git -C /tmp/monado-wmr apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C /tmp/monado-wmr apply "$GITHUB_WORKSPACE/$patch"
+          done
+
+      - name: Compile repository C and C++ utilities
+        run: |
+          mkdir -p /tmp/reverb-g2-compile
+          xml=/usr/share/wayland-protocols/staging/drm-lease/drm-lease-v1.xml
+          wayland-scanner client-header "$xml" /tmp/reverb-g2-compile/drm-lease-v1-client-protocol.h
+          wayland-scanner private-code "$xml" /tmp/reverb-g2-compile/drm-lease-v1-protocol.c
+          read -r -a compile_flags <<< "$(pkg-config --cflags --libs wayland-client vulkan)"
+          for source in scripts/hmd-vk.c; do
+            gcc -O2 -Wall -Wextra -Werror \
+              -I/tmp/reverb-g2-compile \
+              "$source" /tmp/reverb-g2-compile/drm-lease-v1-protocol.c \
+              "${compile_flags[@]}" \
+              -o "/tmp/reverb-g2-compile/$(basename "${source%.c}")"
+          done
+          for source in scripts/openvr-*.cpp; do
+            g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only \
+              -I/tmp/monado-wmr/src/external/openvr_includes "$source"
+          done
+
+      - name: Verify Basalt patch series against pinned source
+        run: |
+          git clone --filter=blob:none https://gitlab.freedesktop.org/mateosss/basalt.git /tmp/basalt
+          git -C /tmp/basalt checkout --detach df6e970c8da7636eb401a09e3317fbeaaf829b9a
+          for patch in patches/basalt-wmr/*.patch; do
+            git -C /tmp/basalt apply --check "$GITHUB_WORKSPACE/$patch"
+            git -C /tmp/basalt apply "$GITHUB_WORKSPACE/$patch"
+          done
+
+      - name: Verify NVIDIA patch series against tested releases
+        run: |
+          while read -r version commit pattern; do
+            target="/tmp/nvidia-$version"
+            git clone --quiet --filter=blob:none --depth 1 --branch "$version" \
+              https://github.com/NVIDIA/open-gpu-kernel-modules.git "$target"
+            test "$(git -C "$target" rev-parse HEAD)" = "$commit"
+            while IFS= read -r patch; do
+              git -C "$target" apply --check "$GITHUB_WORKSPACE/$patch"
+              git -C "$target" apply "$GITHUB_WORKSPACE/$patch"
+            done < <(find patches/nvidia -maxdepth 1 -name "$pattern" -print | sort)
+          done <<'EOF'
+          595.71.05 51edebee79919b54f498c19a0be31982cd97646e 000[1-5]-*.patch
+          610.57.04 e4a5faa2567f28c8eabe0ebb6422b6d0abcf37eb 000[3-5]-*.patch
+          EOF

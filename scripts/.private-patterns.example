@@ -1,0 +1,9 @@
+# Copy this to scripts/.private-patterns (which is gitignored), then replace
+# these descriptions with literal values from your own machine, one per line.
+# Do not put real secrets or identifiers in this example file.
+
+# absolute home-directory path
+# headset/controller/base-station serials
+# MAC addresses, with and without separators
+# motherboard or storage serials
+# private email addresses, hostnames, and account names

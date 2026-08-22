@@ -1,0 +1,62 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b9d63df..417d507 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -106,18 +106,25 @@ find_package(Vulkan MODULE)
+ find_package(HIDAPI MODULE)
+ find_package(bluetooth MODULE)
+ find_package(OpenHMD MODULE)
+-find_package(
+-	OpenCV
+-	COMPONENTS
+-		core
+-		calib3d
+-		highgui
+-		imgproc
+-		imgcodecs
+-		features2d
+-		video
++# OpenCV 5 split the old calib3d/features2d modules into calib + geometry and
++# features.  Probe core first so we can select the component names supported by
++# the installed major version while retaining OpenCV 4 compatibility.
++find_package(OpenCV QUIET COMPONENTS core CONFIG)
++unset(OpenCV_LIBS)
++unset(OpenCV_LIBRARIES)
++if(OpenCV_VERSION_MAJOR GREATER_EQUAL 5)
++	find_package(
++		OpenCV
++		COMPONENTS core calib geometry highgui imgproc imgcodecs features video
+ 		CONFIG
+-	)
++		)
++else()
++	find_package(
++		OpenCV
++		COMPONENTS core calib3d highgui imgproc imgcodecs features2d video
++		CONFIG
++		)
++endif()
+ find_package(Libusb1 MODULE)
+ find_package(JPEG MODULE)
+ find_package(realsense2 CONFIG)
+diff --git a/src/xrt/tracking/constellation/internal/ransac_pnp.cpp b/src/xrt/tracking/constellation/internal/ransac_pnp.cpp
+index a9e5662..ecd04c3 100644
+--- a/src/xrt/tracking/constellation/internal/ransac_pnp.cpp
++++ b/src/xrt/tracking/constellation/internal/ransac_pnp.cpp
+@@ -17,9 +17,14 @@
+ #include "util/u_logging.h"
+ #include "math/m_api.h"
+ 
++#include <opencv2/core/version.hpp>
++#if CV_VERSION_MAJOR >= 5
++#include <opencv2/calib3d.hpp>
++#else
+ #include <opencv2/calib3d/calib3d.hpp>
++#endif
+ #include <opencv2/imgproc/imgproc.hpp>
+-#if CV_MAJOR_VERSION >= 4
++#if CV_MAJOR_VERSION >= 4 && CV_MAJOR_VERSION < 5
+ #include <opencv2/calib3d/calib3d_c.h>
+ #endif
+ #include <cmath>
+

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Reverb G2 VR Control Panel
+Comment=Start and diagnose the Reverb G2 with Index controllers
+Exec=@CONTROL_PANEL@
+TryExec=@CONTROL_PANEL@
+Icon=applications-games
+Terminal=false
+Categories=Game;
+StartupNotify=true

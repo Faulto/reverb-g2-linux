@@ -1,0 +1,61 @@
+# Basalt patches
+
+Basalt is the VIT/SLAM implementation this project loads for 6DoF head tracking
+(`VIT_SYSTEM_LIBRARY_PATH=~/vr/basalt/build/libbasalt.so`, wired in by
+`scripts/jack-in-wayland.sh <mode> 6dof`).
+
+Pinned base SHA: **`df6e970c8da7636eb401a09e3317fbeaaf829b9a`** ("Fix cmake configure on
+fedora"). Apply with `git am` on top of it, then rebuild — the build here is
+`cmake --preset library`, which produces `libbasalt.so` **without** the Pangolin UI, so
+`SLAM_UI=1` is a silent no-op on it (checked 2026-08-12: `nm -D libbasalt.so | grep -c
+pangolin` = 0, and no window ever appears).
+
+| # | Status | What it does |
+|---|--------|--------------|
+| 0001 | unfiled, verified live 2026-08-12 | Makes `--cam-calib` optional so a unified config file can carry pipeline settings only, with the calibration still arriving from the caller (`add_camera_calibration`/`add_imu_calibration`). Needs Monado's `0020` (`SLAM_CONFIG_PIPELINE_ONLY=1`) on the other side. Also moves `monado_out_state_queue.set_capacity(32)` so it runs in every path: `pop_state()` does "push the newest, drop the oldest" via `while (!try_push(x)) pop(_)`, which is a no-op on an unbounded queue, so the caller-driven path — the one Monado uses by default — let that queue grow without bound instead of dropping stale states. |
+| 0002 | measured 2026-08-13 (T180), wearer verdict pending | Caps `input_img_queue` at 2 (was 10) and makes `push_frame` drop the OLDEST frame instead of blocking. With the optical flow slower than the camera (~26 fps processed vs 30 in, at every thread count tried) the 10-slot queue sat permanently full: pure latency, every frame ~380 ms old before the frontend saw it, and the pose Monado anchors dead reckoning to was 0.5–0.9 s stale — measured as the delivered head pose wandering 10–25 mm at rest over a raw SLAM at 0.3–0.9 mm. `vio_enforce_realtime` drops downstream of this queue and measurably does nothing here. After: frame→pose age p50 819 ms → **109 ms**, delivered position residual at rest p50 9.8 mm → **0.57 mm** (p90 24.6 → 1.23). Deterministic mode keeps the lossless blocking push. |
+| 0003 | instrumentation, verified live 2026-08-17 (T192-T195) | `VIT_COLLAPSE_LOG=1` on `vit_tracker`: logs input-side (`push_frame`) and output-side (`pop_state`) rate, frame-timestamp spacing, input-queue depth, and cumulative drops. Written to diagnose the T192-T195 SLAM pose-rate collapse (abrupt, permanent ~17 Hz → ~1.5 Hz, near-constant ~640 ms stall) — the discriminator for input starvation / bad timestamps / queue backpressure at onset. Off by default, one getenv. |
+| 0004 | instrumentation, verified live 2026-08-17 | `VIT_COLLAPSE_LOG` deep-VIO variant: times `optimize()` vs `marginalize()` separately and logs `frame_states`/`frame_poses`/`landmarks`/marg-prior dimension per frame, looking for a structure that grows unbounded over the collapse's ~10 min onset. Reproduced the collapse live on a second, completely different machine (KDE/X11/NVIDIA-550/60Hz) with no companion storm at all — confirming it's a portable Basalt VIO bug, not an environment or hardware artifact. Off by default. |
+| 0005 | instrumentation, verified live 2026-08-17 | `VIT_COLLAPSE_LOG` frontend variant: times `processFrame` and `recallPoints()` and logs tracked-keypoint count plus the `patches` map size (a suspected leak per `addPoints`'s own TODO, though `recall_enable=false` here so it doesn't apply). Localized the stall to upstream of the VIO backend — 0004 already showed `optimize`/`marginalize` staying ~2-3 ms with bounded state. Off by default. |
+| 0006 | instrumentation, verified live 2026-08-17 | `VIT_COLLAPSE_LOG` loop-wait variant: times the input-image pop wait and `processImu` specifically, inside the optical-flow loop. Confirmed the ~600 ms is in `processImu`'s blocking IMU catch-up, not compute — `processFrame` (~10 ms) and VIO opt/marg (~2 ms) both stay fast during the collapse. Off by default. |
+| 0007 | root-cause fix, default OFF at this commit, 2026-08-17 | **The fix.** `BASALT_IMU_NONBLOCK_CATCHUP=1` switches `processImu`'s IMU catch-up from a blocking `input_imu_queue.pop` to `try_pop`: integrate whatever is buffered and extend the last sample to the image timestamp, instead of blocking in real time for the 250 Hz IMU stream to catch up. Root cause (`docs/39`): during the collapse each processed image is ~600 ms ahead of the arriving IMU (frames dropped ~18-at-a-time off the bounded `input_img_queue`), so the blocking pop stalls ~600 ms per frame — and the stall itself causes more frames to pile up and drop, making it self-sustaining. Strict no-op on the healthy path: `try_pop` returns exactly what the blocking pop would whenever the IMU is ahead of the image time, i.e. always except during the pathological empty-queue collapse. Default OFF, pending a drift A/B — see 0008. |
+| 0008 | validated 2026-08-17, default ON | Flips `BASALT_IMU_NONBLOCK_CATCHUP`'s default to ON — unset, or set to anything not starting with `0`/`f`/`F`, now enables it; set `=0` to restore the old blocking behaviour for an A/B. Validated over a >15 min turntable soak (919 s uptime, well past the ~10 min collapse onset): **zero collapse**, 18 419 clean `imu_ms` samples with max 99 ms (rare, self-recovering) against the old permanent ~600 ms pin, cooler quiet the whole time. Two unrelated things surfaced under the same sustained load, both explicitly **not** a regression of this fix (`imu_ms` itself read ~0.002 ms typical): ~3997 cumulative dropped frames and `OUT wall_ms` averaging ~47 ms, plus `monado-service` at ~468% CPU — root-caused separately in `docs/40-constellation-search-cpu-blowup.md` to Basalt's own optical-flow keypoint-detection cost exceeding the camera frame interval (unrelated to this patch or to constellation), with the constellation correspondence-search CPU sink addressed independently by `patches/monado/0051`. |
+| 0009 | measured NEGATIVE result, 2026-08-17 (T197) | `BASALT_VISION_NONBLOCK` (default ON) caps `vision_data_queue` — the OF→VIO handoff, the third and last blocking latency reservoir on the live path after 0001 (state output) and 0002 (image input) — at capacity 2 (was 10) and pushes into it drop-oldest, same policy as the other two. Written against a measured plateau: with the VIO backend saturating at ~63-66 ms/frame, the stock capacity-10 blocking queue fills once during an early burst and (arrival rate == service rate) never drains, pinning delivered-pose age at capacity × service time ≈ 632 ms — T192/T194's collapse period, finally sourced to a second, independent mechanism from 0007/0008's `processImu` block. **Measured counterproductive on the very next relaunch**: with drop-oldest, the backend only ever consumes the newest survivor (frames arrive ~400 ms apart), every one of them crosses the keyframe threshold, and per-frame cost explodes 66 → ~400 ms (full `optimize`+`marginalize` every time) — a self-reinforcing ratchet down to **2.5 Hz output**, the old collapse signature reborn. Superseded by `0010` in the same session; kept as the documented negative result, not reverted. See `docs/pruebas.jsonl` T197. Base: `ae697f9` on `lab` (on top of `2a67f76`). |
+| 0010 | validated 2026-08-17 (T197), same-session correction of 0009 | Demotes drop-oldest to opt-in (`BASALT_VISION_DROP_OLDEST=1`, default OFF) and makes the default push into the capacity-2 `vision_data_queue` **blocking**. Keeps 0009's actual fix (short queue, ~632 ms latency reservoir gone) while moving the shedding back to the input side, where 0002's drop-oldest already runs at an equilibrium the backend tolerates (~66-72 ms/frame at rest, most frames non-keyframe) instead of forcing every surviving frame past the keyframe threshold. Confirmed live in the same session: backend back to 66-72 ms/frame at rest. `BASALT_VISION_DROP_OLDEST=1` is kept only to reproduce 0009's negative result on demand. See `docs/pruebas.jsonl` T197. Base: `696a02f` on `lab`. |
+| 0011 | validated 2026-08-17 (T204/T205) | Caps `ExecutionStats::add()`'s per-key `data_` vectors (`std::vector<double>` and `std::vector<Eigen::VectorXd>` overloads both) at 65536 entries instead of appending unconditionally. On the live Monado path these vectors are pure dead weight — appended on every VIO solve, some keys once per Gauss-Newton iteration, never read, never cleared — and were found to be the dominant term of a measured **~72 MB/h RSS growth over a 9h session (356 MB → 1 GB)**. Offline evaluation runs, which *do* read these via `print()`/`save_json()` against a finite dataset, rarely reach the cap; a live session now simply stops accumulating past it instead of growing for the process lifetime. Bounded worst case: 65536 doubles × ~16 keys ≈ 8 MB. Found by the same night's parallel leak-hunt workstream that also produced `patches/monado/0060`'s `pose_destroy` fix. Base: `time_utils.cpp` on `lab`, commit `ae2e9dae3`. |
+
+## Why this exists
+
+Basalt's default pipeline settings are also its EuRoC settings (`data/default_config.json`
+and `data/euroc/euroc_config.json` are byte-for-byte identical). On the Reverb G2's four
+640x480 fisheye cameras those defaults detect far too few points: measured 2026-08-12, with
+perfect-looking images and correct calibration, Basalt held a mean of **0.0–0.9 landmarks
+per camera** and the pose was pure IMU dead reckoning — thousands of metres of runaway from
+a motionless headset.
+
+Raising detection to `grid_size 30`, `num_points_cell 3`, `min_threshold 3` took static
+drift to **0.72 m at 60 s**, reproduced twice. No single one of the three parameters was
+enough on its own (measured at 60 s: only-`num_points_cell` 4613 m, only-`min_threshold`
+1791 m, only-`grid_size` 865 m) — it is a threshold effect, not one wrong knob.
+
+Config files used for the sweep live in `~/vr/slam-configs/` on the lab machine, driven by
+`SLAM_CONFIG=<file.toml> SLAM_CONFIG_PIPELINE_ONLY=1`.
+
+## Known open bug, not fixed here
+
+Under load — disk I/O from the EuRoC recorder, or CPU from more aggressive detection —
+camera timestamps coming out of Monado's clock-offset conversion (`m_clock_offset_a2b` →
+`cam_hw2mono` in `wmr_source.c`) go **non-monotonic**, and Basalt responds by aborting the
+whole process:
+
+```
+***** Assertion (prev_frame->t_ns < curr_frame->t_ns) failed in
+      basalt::SqrtKeypointVioEstimator<float>::initialize(...)::<lambda()>:
+      sqrt_keypoint_vio.cpp:311: frame timestamps not monotonically increasing?!
+```
+
+Seen twice on 2026-08-12 with two different triggers, killing `monado-service` both times
+(SIGABRT, coredump). This is currently the ceiling on tuning detection any harder, and it
+can also end a real game session. Two candidate fixes, neither attempted: drop the
+offending frame instead of aborting (Basalt side), or stabilise `cam_hw2mono` under load
+(Monado side). See `docs/pruebas.jsonl` T162.

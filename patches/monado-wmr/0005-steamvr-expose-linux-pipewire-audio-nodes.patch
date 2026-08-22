@@ -1,0 +1,48 @@
+diff --git a/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp b/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
+index 551f4e249..0097c33af 100644
+--- a/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
++++ b/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
+@@ -1611,6 +1611,43 @@ CDeviceDriver_Monado::Activate(vr::TrackedDeviceIndex_t unObjectId)
+ 	vr::VRProperties()->SetFloatProperty(m_ulPropertyContainer, vr::Prop_DisplayFrequency_Float, m_flDisplayFrequency);
+ 	vr::VRProperties()->SetFloatProperty( m_ulPropertyContainer, vr::Prop_SecondsFromVsyncToPhotons_Float, m_flSecondsFromVsyncToPhotons);
+ 
++	// SteamVR's Linux audio manager cannot infer the USB audio endpoint from a custom HMD
++	// driver. Let the launcher provide both the stable PipeWire node name (legacy property)
++	// and this session's numeric PipeWire node ID. Properties 2400/2401 were added after the
++	// OpenVR headers vendored by this Monado branch, so use their ABI-stable numeric values.
++	const char *playback_device = getenv("STEAMVR_AUDIO_PLAYBACK_DEVICE");
++	if (playback_device != nullptr && playback_device[0] != '\0') {
++		vr::VRProperties()->SetStringProperty(
++		    m_ulPropertyContainer, vr::Prop_Audio_DefaultPlaybackDeviceId_String, playback_device);
++	}
++	const char *recording_device = getenv("STEAMVR_AUDIO_RECORDING_DEVICE");
++	if (recording_device != nullptr && recording_device[0] != '\0') {
++		vr::VRProperties()->SetStringProperty(
++		    m_ulPropertyContainer, vr::Prop_Audio_DefaultRecordingDeviceId_String, recording_device);
++	}
++	const auto set_pipewire_node = [this](const char *environment_name, int property_number) {
++		const char *text = getenv(environment_name);
++		if (text == nullptr || text[0] == '\0') {
++			return;
++		}
++		char *end = nullptr;
++		const long node = strtol(text, &end, 10);
++		if (end == text || *end != '\0' || node <= 0 || node > INT32_MAX) {
++			ovrd_log("Ignoring invalid %s=%s\n", environment_name, text);
++			return;
++		}
++		vr::VRProperties()->SetInt32Property(
++		    m_ulPropertyContainer, static_cast<vr::ETrackedDeviceProperty>(property_number), (int32_t)node);
++	};
++	set_pipewire_node("STEAMVR_AUDIO_PIPEWIRE_PLAYBACK_NODE", 2400);
++	set_pipewire_node("STEAMVR_AUDIO_PIPEWIRE_RECORDING_NODE", 2401);
++	if (playback_device != nullptr && playback_device[0] != '\0') {
++		ovrd_log("HMD audio playback endpoint: %s (PipeWire node %s)\n", playback_device,
++		         getenv("STEAMVR_AUDIO_PIPEWIRE_PLAYBACK_NODE") != nullptr
++		             ? getenv("STEAMVR_AUDIO_PIPEWIRE_PLAYBACK_NODE")
++		             : "not supplied");
++	}
++
+ 	// return a constant that's not 0 (invalid) or 1 (reserved for Oculus)
+ 	vr::VRProperties()->SetUint64Property( m_ulPropertyContainer, vr::Prop_CurrentUniverseId_Uint64, 2);
+ 

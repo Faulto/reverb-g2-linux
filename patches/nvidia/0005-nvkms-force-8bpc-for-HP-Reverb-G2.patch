@@ -1,0 +1,47 @@
+From 6dd727510300d11e6db5e66e431e83133f4295e7 Mon Sep 17 00:00:00 2001
+From: reverb-g2 contributors <noreply@localhost>
+Date: Tue, 18 Aug 2026 19:20:00 +1000
+Subject: [PATCH 5/5] nvkms-dpy: force 8 bpc for the HP Reverb G2
+
+The Reverb G2's EDID 1.4 Video Input Definition leaves color depth at
+000 (undefined).  Patch 0004 prevents that value from incorrectly capping
+the sink's maximum at 6 bpc, but the normal DisplayPort minimum remains
+6 bpc.  NVKMS 610 on Blackwell still selects that minimum even when the
+Vulkan swapchain uses a 10-bit surface format: the kernel attaches at
+18 bpp and the headset reports 6 bpc in DEVICE_STATUS.
+
+Windows drives this headset at 8 bpc.  Set both ends of the RGB444 range
+to 8 bpc only for the exact Reverb G2 EDID (raw HPN manufacturer bytes
+22 0e are stored as 0x0E22, product 0x36C1) and only when its depth field
+is undefined.  Other HP products and DP displays are unchanged.
+---
+ src/nvidia-modeset/src/nvkms-dpy.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/nvidia-modeset/src/nvkms-dpy.c b/src/nvidia-modeset/src/nvkms-dpy.c
+--- a/src/nvidia-modeset/src/nvkms-dpy.c
++++ b/src/nvidia-modeset/src/nvkms-dpy.c
+@@ -3478,8 +3478,19 @@ NvKmsDpyOutputColorFormatInfo nvDpyGetOutputColorFormatInfo(
+                         NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_8;
+                 }
+ 
+-                colorFormatsInfo.rgb444.minBpc =
+-                    NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_6;
++                /*
++                 * The HP Reverb G2 leaves EDID color depth undefined.  It
++                 * requires 8 bpc even though generic DP sinks may use 6.
++                 */
++                if ((info->manuf_id == 0x0E22) &&
++                    (info->product_id == 0x36C1) &&
++                    (info->input.u.digital.bpc == 0)) {
++                    colorFormatsInfo.rgb444.minBpc =
++                        NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_8;
++                } else {
++                    colorFormatsInfo.rgb444.minBpc =
++                        NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_6;
++                }
+                 if (colorFormatsInfo.yuv444.maxBpc !=
+                         NV_KMS_DPY_ATTRIBUTE_CURRENT_COLOR_BPC_UNKNOWN) {
+                      colorFormatsInfo.yuv444.minBpc =
+-- 
+2.53.0

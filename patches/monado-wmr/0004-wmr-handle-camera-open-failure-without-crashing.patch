@@ -1,0 +1,39 @@
+diff --git a/src/xrt/drivers/wmr/wmr_camera.c b/src/xrt/drivers/wmr/wmr_camera.c
+index d51e026..46ea7b2 100644
+--- a/src/xrt/drivers/wmr/wmr_camera.c
++++ b/src/xrt/drivers/wmr/wmr_camera.c
+@@ -559,7 +559,7 @@ wmr_camera_open(struct wmr_camera_open_config *config)
+ 	DRV_TRACE_MARKER();
+ 
+ 	struct wmr_camera *cam = calloc(1, sizeof(struct wmr_camera));
+-	int res;
++	int res = LIBUSB_ERROR_OTHER;
+ 	int i;
+ 
+ 	cam->tcam_count = config->tcam_count;
+@@ -589,6 +589,10 @@ wmr_camera_open(struct wmr_camera_open_config *config)
+ 	struct xrt_prober_device *dev_holo = config->dev_holo;
+ 	cam->dev = libusb_open_device_with_vid_pid(cam->ctx, dev_holo->vendor_id, dev_holo->product_id);
+ 	if (cam->dev == NULL) {
++		WMR_CAM_ERROR(cam,
++		              "libusb could not open %04x:%04x; check raw USB udev permissions",
++		              dev_holo->vendor_id,
++		              dev_holo->product_id);
+ 		goto fail;
+ 	}
+ 
+diff --git a/src/xrt/drivers/wmr/wmr_source.c b/src/xrt/drivers/wmr/wmr_source.c
+index 841ee7f..6a346aa 100644
+--- a/src/xrt/drivers/wmr/wmr_source.c
++++ b/src/xrt/drivers/wmr/wmr_source.c
+@@ -297,6 +297,10 @@ wmr_source_stream_start(struct xrt_fs *xfs,
+ 	DRV_TRACE_MARKER();
+ 
+ 	struct wmr_source *ws = wmr_source_from_xfs(xfs);
++	if (ws->camera == NULL) {
++		WMR_ERROR(ws, "WMR camera was not opened; check raw USB udev permissions");
++		return false;
++	}
+ 
+ 	if (xs == NULL && capture_type == XRT_FS_CAPTURE_TYPE_TRACKING) {
+ 		WMR_INFO(ws, "Starting WMR stream in tracking mode");

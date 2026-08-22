@@ -1,0 +1,412 @@
+diff --git a/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp b/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
+index 0097c33af..adc9a49db 100644
+--- a/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
++++ b/src/xrt/state_trackers/steamvr_drv/ovrd_driver.cpp
+@@ -15,10 +15,13 @@
+ #include <cstdlib>
+ #include <cassert>
+ #include <array>
++#include <cmath>
+ #include <mutex>
+ #include <thread>
+ #include <vector>
+ 
++#include <strings.h>
++
+ #include "math/m_api.h"
+ #include "ovrd_log.hpp"
+ #include "openvr_driver.h"
+@@ -204,6 +207,38 @@ copy_quat(const struct xrt_quat *from, vr::HmdQuaternion_t *to)
+  * coherent through a glide. Design + offline validation: results/b2-resnap-design-20260704/.
+  */
+ namespace {
++double
++session_env_double(const char *name, double fallback, double minimum, double maximum)
++{
++	const char *raw = std::getenv(name);
++	if (raw == nullptr || raw[0] == '\0') {
++		return fallback;
++	}
++	char *end = nullptr;
++	double value = std::strtod(raw, &end);
++	return end != raw && *end == '\0' && std::isfinite(value) && value >= minimum && value <= maximum
++	           ? value
++	           : fallback;
++}
++
++bool
++session_env_bool(const char *name, bool fallback)
++{
++	const char *raw = std::getenv(name);
++	if (raw == nullptr || raw[0] == '\0') {
++		return fallback;
++	}
++	if (strcmp(raw, "1") == 0 || strcasecmp(raw, "true") == 0 || strcasecmp(raw, "yes") == 0 ||
++	    strcasecmp(raw, "on") == 0) {
++		return true;
++	}
++	if (strcmp(raw, "0") == 0 || strcasecmp(raw, "false") == 0 || strcasecmp(raw, "no") == 0 ||
++	    strcasecmp(raw, "off") == 0) {
++		return false;
++	}
++	return fallback;
++}
++
+ struct WorldReanchorGuard
+ {
+ 	std::mutex lock;
+@@ -212,24 +247,169 @@ struct WorldReanchorGuard
+ 	timepoint_ns prev_ns = 0;
+ 	struct xrt_pose prev_pose = {};
+ 	double prev_gyro_dps = 0.0;
++	bool have_session_anchor = false;
++	struct xrt_vec3 session_anchor = {};
++	bool have_safe_pose = false;
++	struct xrt_pose safe_pose = XRT_POSE_IDENTITY;
++	double half_width_m;
++	double half_depth_m;
++	double eye_height_m;
++	double headroom_m;
++	bool height_recovery_enabled;
++	double height_recovery_delay_s;
++	double height_recovery_rate_mps;
++	double height_recovery_margin_m;
++	double height_bias_m = 0.0;
++	timepoint_ns height_upright_since_ns = 0;
++	timepoint_ns height_last_update_ns = 0;
++	bool height_recovery_active = false;
++	timepoint_ns last_height_warning_ns = 0;
++	timepoint_ns last_bounds_warning_ns = 0;
+ 
+ 	WorldReanchorGuard()
++	    : half_width_m(session_env_double("WMR_SLAM_SESSION_WIDTH_M", 5.0, 1.0, 20.0) * 0.5),
++	      half_depth_m(session_env_double("WMR_SLAM_SESSION_DEPTH_M", 5.0, 1.0, 20.0) * 0.5),
++	      eye_height_m(session_env_double("WMR_SLAM_EYE_HEIGHT_M", 1.76, 0.5, 2.5)),
++	      headroom_m(session_env_double("WMR_SLAM_HEADROOM_M", 0.40, 0.0, 2.0)),
++	      height_recovery_enabled(session_env_bool("WMR_SLAM_HEIGHT_RECOVERY", true)),
++	      height_recovery_delay_s(session_env_double("WMR_SLAM_HEIGHT_RECOVERY_DELAY_S", 8.0, 3.0, 30.0)),
++	      height_recovery_rate_mps(session_env_double("WMR_SLAM_HEIGHT_RECOVERY_RATE_MPS", 0.05, 0.01, 0.20)),
++	      height_recovery_margin_m(session_env_double("WMR_SLAM_HEIGHT_RECOVERY_MARGIN_M", 0.75, 0.10, 2.0))
+ 	{
+ 		u_world_reanchor_init(&wr);
+ 	}
+ };
+ WorldReanchorGuard g_world_guard;
+ 
++bool
++session_position_finite(const struct xrt_vec3 &p)
++{
++	return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
++}
++
++bool
++session_orientation_finite(const struct xrt_quat &q)
++{
++	return std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w);
++}
++
++double
++session_up_y(const struct xrt_quat &q)
++{
++	return 1.0 - 2.0 * ((double)q.x * q.x + (double)q.z * q.z);
++}
++
++bool
++session_position_in_bounds(const WorldReanchorGuard &guard, const struct xrt_vec3 &p)
++{
++	if (!guard.have_session_anchor || !session_position_finite(p)) {
++		return false;
++	}
++	const double dx = (double)p.x - guard.session_anchor.x;
++	const double dy = (double)p.y - guard.session_anchor.y;
++	const double dz = (double)p.z - guard.session_anchor.z;
++	return std::abs(dx) <= guard.half_width_m && std::abs(dz) <= guard.half_depth_m &&
++	       dy >= -guard.eye_height_m && dy <= guard.headroom_m;
++}
++
++bool
++session_position_horizontal_in_bounds(const WorldReanchorGuard &guard, const struct xrt_vec3 &p)
++{
++	if (!guard.have_session_anchor || !session_position_finite(p)) {
++		return false;
++	}
++	const double dx = (double)p.x - guard.session_anchor.x;
++	const double dz = (double)p.z - guard.session_anchor.z;
++	return std::abs(dx) <= guard.half_width_m && std::abs(dz) <= guard.half_depth_m;
++}
++
++bool
++session_position_vertical_recoverable(const WorldReanchorGuard &guard, const struct xrt_vec3 &p)
++{
++	if (!guard.have_session_anchor || !session_position_finite(p)) {
++		return false;
++	}
++	const double dy = (double)p.y - guard.session_anchor.y;
++	return dy >= -guard.eye_height_m - guard.height_recovery_margin_m &&
++	       dy <= guard.headroom_m + guard.height_recovery_margin_m;
++}
++
++void
++world_guard_apply_height_bias(const WorldReanchorGuard &guard, struct xrt_pose *pose)
++{
++	pose->position.y = (float)((double)pose->position.y + guard.height_bias_m);
++}
++
+ void
+-world_guard_pack_delta(const struct u_world_reanchor &wr, float out_delta7[7])
++world_guard_update_height_recovery(WorldReanchorGuard &guard,
++                                   const struct xrt_space_relation &rel,
++                                   const struct xrt_pose &base_presented,
++                                   timepoint_ns now_ns,
++                                   double gyro_dps,
++                                   double horizontal_speed_mps)
+ {
+-	out_delta7[0] = (float)wr.dp[0];
+-	out_delta7[1] = (float)wr.dp[1];
+-	out_delta7[2] = (float)wr.dp[2];
+-	out_delta7[3] = (float)wr.dq[0];
+-	out_delta7[4] = (float)wr.dq[1];
+-	out_delta7[5] = (float)wr.dq[2];
+-	out_delta7[6] = (float)wr.dq[3];
++	const enum xrt_space_relation_flags pose_tracked = (enum xrt_space_relation_flags)(
++	    XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
++	const double raw_height_error =
++	    guard.have_session_anchor ? (double)base_presented.position.y - guard.session_anchor.y : INFINITY;
++	const bool still_upright = guard.height_recovery_enabled && guard.have_session_anchor &&
++	                           (rel.relation_flags & pose_tracked) == pose_tracked &&
++	                           session_orientation_finite(base_presented.orientation) &&
++	                           session_up_y(base_presented.orientation) >= 0.985 && gyro_dps <= 6.0 &&
++	                           horizontal_speed_mps <= 0.12 &&
++	                           session_position_horizontal_in_bounds(guard, base_presented.position) &&
++	                           std::abs(raw_height_error) <= guard.height_recovery_margin_m;
++	if (!still_upright) {
++		guard.height_upright_since_ns = 0;
++		guard.height_last_update_ns = now_ns;
++		guard.height_recovery_active = false;
++		return;
++	}
++
++	if (guard.height_upright_since_ns == 0) {
++		guard.height_upright_since_ns = now_ns;
++		guard.height_last_update_ns = now_ns;
++		return;
++	}
++	const double upright_s = (double)(now_ns - guard.height_upright_since_ns) * 1e-9;
++	if (upright_s < guard.height_recovery_delay_s) {
++		guard.height_last_update_ns = now_ns;
++		return;
++	}
++
++	double dt_s = guard.height_last_update_ns > 0 ? (double)(now_ns - guard.height_last_update_ns) * 1e-9 : 0.0;
++	guard.height_last_update_ns = now_ns;
++	dt_s = std::max(0.0, std::min(dt_s, 0.10));
++	const double desired_bias = (double)guard.session_anchor.y - (double)base_presented.position.y;
++	const double remaining = desired_bias - guard.height_bias_m;
++	if (std::abs(remaining) <= 0.03) {
++		// Start a fresh dwell if the raw estimate wanders out of the deadband again. Without this,
++		// small stationary noise repeatedly announces and starts recovery on every GetPose call.
++		guard.height_upright_since_ns = now_ns;
++		guard.height_recovery_active = false;
++		return;
++	}
++
++	if (!guard.height_recovery_active) {
++		ovrd_log("G2 upright height recovery started: presented y %.3f, anchor y %.3f, bias %.3f -> %.3f\n",
++		         (double)base_presented.position.y + guard.height_bias_m, (double)guard.session_anchor.y,
++		         guard.height_bias_m, desired_bias);
++		guard.height_recovery_active = true;
++	}
++	const double max_step = guard.height_recovery_rate_mps * dt_s;
++	guard.height_bias_m += std::max(-max_step, std::min(remaining, max_step));
++}
++
++void
++world_guard_pack_delta(const WorldReanchorGuard &guard, float out_delta7[7])
++{
++	out_delta7[0] = (float)guard.wr.dp[0];
++	out_delta7[1] = (float)(guard.wr.dp[1] + guard.height_bias_m);
++	out_delta7[2] = (float)guard.wr.dp[2];
++	out_delta7[3] = (float)guard.wr.dq[0];
++	out_delta7[4] = (float)guard.wr.dq[1];
++	out_delta7[5] = (float)guard.wr.dq[2];
++	out_delta7[6] = (float)guard.wr.dq[3];
+ }
+ } // namespace
+ 
+@@ -1182,7 +1362,8 @@ public:
+ 		{
+ 			std::lock_guard<std::mutex> lk(g_world_guard.lock);
+ 			u_world_reanchor_apply(&g_world_guard.wr, &rel.pose, &presented);
+-			world_guard_pack_delta(g_world_guard.wr, delta7);
++			world_guard_apply_height_bias(g_world_guard, &presented);
++			world_guard_pack_delta(g_world_guard, delta7);
+ 		}
+ 
+ 		apply_pose(&rel, &presented, &m_pose);
+@@ -1739,6 +1920,10 @@ CDeviceDriver_Monado::GetPose()
+ 	const double gyro_dps =
+ 	    sqrt((double)gv.x * gv.x + (double)gv.y * gv.y + (double)gv.z * gv.z) * (180.0 / M_PI);
+ 	const double speed_mps = sqrt((double)lv3.x * lv3.x + (double)lv3.y * lv3.y + (double)lv3.z * lv3.z);
++	// Basalt's false-height failure appears in the Y velocity as well as the Y pose. Using the
++	// full 3D speed here creates a feedback loop: the height error continuously resets the dwell
++	// timer intended to correct it. Horizontal velocity still rejects actual walking.
++	const double horizontal_speed_mps = sqrt((double)lv3.x * lv3.x + (double)lv3.z * lv3.z);
+ 
+ 	struct xrt_pose *offset = &m_xdev->tracking_origin->initial_offset;
+ 
+@@ -1752,6 +1937,8 @@ CDeviceDriver_Monado::GetPose()
+ 	// pulls leave the delta untouched and present the raw pose bit-identically.
+ 	struct xrt_pose presented = rel.pose;
+ 	bool absorbed = false;
++	bool hard_bounds_rejected = false;
++	bool height_soft_held = false;
+ 	double abs_ang_deg = 0.0;
+ 	double abs_pos_m = 0.0;
+ 	float delta7[7] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 1.f};
+@@ -1759,22 +1946,121 @@ CDeviceDriver_Monado::GetPose()
+ 		std::lock_guard<std::mutex> lk(g_world_guard.lock);
+ 		const enum xrt_space_relation_flags pose_valid = (enum xrt_space_relation_flags)(
+ 		    XRT_SPACE_RELATION_ORIENTATION_VALID_BIT | XRT_SPACE_RELATION_POSITION_VALID_BIT);
+-		if ((rel.relation_flags & pose_valid) == pose_valid) {
++		const enum xrt_space_relation_flags pose_tracked = (enum xrt_space_relation_flags)(
++		    XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
++		const bool relation_finite = session_position_finite(rel.pose.position) &&
++		                             session_orientation_finite(rel.pose.orientation);
++		const double position_norm = relation_finite
++		                                 ? std::sqrt((double)rel.pose.position.x * rel.pose.position.x +
++		                                             (double)rel.pose.position.y * rel.pose.position.y +
++		                                             (double)rel.pose.position.z * rel.pose.position.z)
++		                                 : INFINITY;
++		if (!g_world_guard.have_session_anchor && (rel.relation_flags & pose_tracked) == pose_tracked &&
++		    relation_finite && position_norm <= 20.0 && session_up_y(rel.pose.orientation) >= 0.70) {
++			g_world_guard.session_anchor = rel.pose.position;
++			g_world_guard.have_session_anchor = true;
++			g_world_guard.safe_pose = rel.pose;
++			g_world_guard.have_safe_pose = true;
++			ovrd_log("G2 session bounds anchored at %.3f %.3f %.3f: %.1fx%.1fm, y=[%.3f, %.3f]m\n",
++			         rel.pose.position.x, rel.pose.position.y, rel.pose.position.z,
++			         2.0 * g_world_guard.half_width_m, 2.0 * g_world_guard.half_depth_m,
++			         rel.pose.position.y - g_world_guard.eye_height_m,
++			         rel.pose.position.y + g_world_guard.headroom_m);
++			ovrd_log("G2 upright height recovery %s: dwell %.1fs, rate %.3fm/s, soft margin %.2fm\n",
++			         g_world_guard.height_recovery_enabled ? "enabled" : "disabled",
++			         g_world_guard.height_recovery_delay_s, g_world_guard.height_recovery_rate_mps,
++			         g_world_guard.height_recovery_margin_m);
++		}
++
++		if ((rel.relation_flags & pose_valid) == pose_valid && relation_finite &&
++		    g_world_guard.have_session_anchor) {
++			// Trial the re-anchor update, then add the persistent upright-height correction. The
++			// correction is presentation-only: Basalt keeps its raw map and Lighthouse controllers
++			// keep their independent, already-calibrated tracking coordinates.
++			struct u_world_reanchor candidate_wr = g_world_guard.wr;
++			bool candidate_absorbed = false;
+ 			if (g_world_guard.have_prev && now_ns > g_world_guard.prev_ns) {
+ 				const double dt_s = (double)(now_ns - g_world_guard.prev_ns) * 1e-9;
+ 				const double gyro_int_deg =
+ 				    0.5 * (g_world_guard.prev_gyro_dps + gyro_dps) * dt_s;
+-				absorbed = u_world_reanchor_update(
+-				    &g_world_guard.wr, &u_world_reanchor_default_params, &g_world_guard.prev_pose,
++				candidate_absorbed = u_world_reanchor_update(
++				    &candidate_wr, &u_world_reanchor_default_params, &g_world_guard.prev_pose,
+ 				    &rel.pose, dt_s, gyro_int_deg, gyro_dps, speed_mps, &abs_ang_deg, &abs_pos_m);
+ 			}
+-			g_world_guard.prev_pose = rel.pose;
+-			g_world_guard.prev_ns = now_ns;
+-			g_world_guard.prev_gyro_dps = gyro_dps;
+-			g_world_guard.have_prev = true;
++			struct xrt_pose candidate_base = rel.pose;
++			u_world_reanchor_apply(&candidate_wr, &rel.pose, &candidate_base);
++			world_guard_update_height_recovery(
++			    g_world_guard, rel, candidate_base, now_ns, gyro_dps, horizontal_speed_mps);
++			struct xrt_pose candidate_presented = candidate_base;
++			world_guard_apply_height_bias(g_world_guard, &candidate_presented);
++			if (session_position_in_bounds(g_world_guard, candidate_presented.position)) {
++				g_world_guard.wr = candidate_wr;
++				g_world_guard.prev_pose = rel.pose;
++				g_world_guard.prev_ns = now_ns;
++				g_world_guard.prev_gyro_dps = gyro_dps;
++				g_world_guard.have_prev = true;
++				g_world_guard.safe_pose = candidate_presented;
++				g_world_guard.have_safe_pose = true;
++				presented = candidate_presented;
++				absorbed = candidate_absorbed;
++			} else if (g_world_guard.height_recovery_enabled && g_world_guard.have_safe_pose &&
++			           (rel.relation_flags & pose_tracked) == pose_tracked &&
++			           session_position_horizontal_in_bounds(g_world_guard, candidate_presented.position) &&
++			           session_position_vertical_recoverable(g_world_guard, candidate_presented.position)) {
++				// A moderate vertical-only excursion is the G2 pitch/height failure seen in practice,
++				// not a reason to tell SteamVR the HMD is out of range (which blanks both panels).
++				// Preserve live X/Z and orientation, hold the last safe Y, and keep feeding the
++				// recovery dwell. Once the bias brings Y back inside the envelope this releases
++				// continuously from the boundary instead of snapping.
++				g_world_guard.wr = candidate_wr;
++				g_world_guard.prev_pose = rel.pose;
++				g_world_guard.prev_ns = now_ns;
++				g_world_guard.prev_gyro_dps = gyro_dps;
++				g_world_guard.have_prev = true;
++				presented = candidate_presented;
++				presented.position.y = g_world_guard.safe_pose.position.y;
++				g_world_guard.safe_pose = presented;
++				height_soft_held = true;
++				absorbed = candidate_absorbed;
++				if (g_world_guard.last_height_warning_ns == 0 ||
++				    now_ns - g_world_guard.last_height_warning_ns >= 1000000000ll) {
++					ovrd_log("G2 recoverable height drift %.3f (anchor %.3f, bias %.3f); holding y %.3f without blanking\n",
++					         candidate_base.position.y, g_world_guard.session_anchor.y,
++					         g_world_guard.height_bias_m, presented.position.y);
++					g_world_guard.last_height_warning_ns = now_ns;
++				}
++			} else {
++				hard_bounds_rejected = true;
++			}
++		} else {
++			g_world_guard.height_upright_since_ns = 0;
++			g_world_guard.height_recovery_active = false;
++			hard_bounds_rejected = true;
+ 		}
+-		u_world_reanchor_apply(&g_world_guard.wr, &rel.pose, &presented);
+-		world_guard_pack_delta(g_world_guard.wr, delta7);
++
++		if (hard_bounds_rejected) {
++			// Freeze translation at the last safe pose, but retain finite live orientation so a
++			// tracking failure cannot throw the player while head rotation remains comfortable.
++			struct xrt_pose live_orientation = rel.pose;
++			u_world_reanchor_apply(&g_world_guard.wr, &rel.pose, &live_orientation);
++			world_guard_apply_height_bias(g_world_guard, &live_orientation);
++			if (g_world_guard.have_safe_pose) {
++				presented = g_world_guard.safe_pose;
++			} else {
++				presented.position = {0.0f, (float)g_world_guard.eye_height_m, 0.0f};
++			}
++			if (session_orientation_finite(live_orientation.orientation)) {
++				presented.orientation = live_orientation.orientation;
++			}
++			if (g_world_guard.last_bounds_warning_ns == 0 ||
++			    now_ns - g_world_guard.last_bounds_warning_ns >= 1000000000ll) {
++				ovrd_log("G2 session bounds rejected pose %.3f %.3f %.3f; holding %.3f %.3f %.3f\n",
++				         rel.pose.position.x, rel.pose.position.y, rel.pose.position.z,
++				         presented.position.x, presented.position.y, presented.position.z);
++				g_world_guard.last_bounds_warning_ns = now_ns;
++			}
++		}
++		world_guard_pack_delta(g_world_guard, delta7);
+ 	}
+ 	if (absorbed && g2_telem_enabled()) {
+ 		g2_telem_event(0, (uint64_t)now_ns, G2_TELEM_EV_WORLD_REANCHOR_ANG_DEG, (float)abs_ang_deg);
+@@ -1807,6 +2093,15 @@ CDeviceDriver_Monado::GetPose()
+ 	    .deviceIsConnected = true,
+ 	};
+ 	apply_pose(&rel, &presented, &t);
++	if (hard_bounds_rejected) {
++		t.result = vr::TrackingResult_Running_OutOfRange;
++		t.vecVelocity[0] = t.vecVelocity[1] = t.vecVelocity[2] = 0.0;
++		t.vecAcceleration[0] = t.vecAcceleration[1] = t.vecAcceleration[2] = 0.0;
++	}
++	if (height_soft_held) {
++		t.vecVelocity[1] = 0.0;
++		t.vecAcceleration[1] = 0.0;
++	}
+ 
+ 	// S2's dev0 getpose tap: the presented head pose (the felt signal, post-guard — the
+ 	// head_pose.bin telemetry tap stays PRE-guard by design so SLAM regressions can never hide

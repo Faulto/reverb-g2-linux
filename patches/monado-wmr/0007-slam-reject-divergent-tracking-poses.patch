@@ -1,0 +1,141 @@
+diff --git a/src/xrt/auxiliary/tracking/t_tracker_slam.cpp b/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
+index 5bbea4bd4..4306a1066 100644
+--- a/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
++++ b/src/xrt/auxiliary/tracking/t_tracker_slam.cpp
+@@ -310,6 +310,20 @@ struct TrackerSlam
+ 	RelationHistory slam_rels{};    //!< A history of relations produced purely from external SLAM tracker data
+ 	int dbg_pred_every = 1;         //!< Skip X SLAM poses so that you get tracked mostly by the prediction algo
+ 	int dbg_pred_counter = 0;       //!< SLAM pose counter for prediction debugging
++	//! Reject a corrupt VIT trajectory before it can poison relation history or a saved room origin.
++	struct
++	{
++		bool have_anchor = false;
++		xrt_vec3 anchor{};
++		bool have_last_good = false;
++		xrt_vec3 last_good{};
++		int consecutive_bad = 0;
++		float absolute_limit_m = 20.0f;
++		float radius_limit_m = 4.5f;
++		float step_limit_m = 2.0f;
++		float velocity_limit_mps = 10.0f;
++		int reset_after = 3;
++	} safety;
+ 	struct os_mutex lock_ff;        //!< Lock for gyro_ff and accel_ff.
+ 	struct m_ff_vec3_f32 *gyro_ff;  //!< Last gyroscope samples
+ 	struct m_ff_vec3_f32 *accel_ff; //!< Last accelerometer samples
+@@ -786,34 +800,57 @@ flush_poses(TrackerSlam &t)
+ 		xrt_quat nrot{data.ox, data.oy, data.oz, data.ow};
+ 		xrt_vec3 nvel{data.vx, data.vy, data.vz};
+ 
+-		// Divergence guard: Basalt can emit a non-finite or wildly-displaced pose when visual
+-		// landmarks degenerate (a saturated window -> backsubstitution NaN). Pushing it permanently
+-		// corrupts the relation history (the head then "diverges forever until reset"). Drop bad
+-		// poses; after a sustained run, reset the tracker so the head self-heals. Head-side analogue
+-		// of the controller optical-jump gate.
+-		static int slam_consec_bad = 0;
+-		static const int SLAM_MAX_CONSEC_BAD = 30; // ~1 s of bad poses before forcing a reset
++		// Divergence guard: reject corruption before it reaches relation history. The old guard only
++		// rejected positions beyond 1 km and waited about a second to reset; a stable 125 m pose was
++		// therefore accepted long enough for SteamVR to save it as the standing origin.
+ 		bool pose_finite = std::isfinite(npos.x) && std::isfinite(npos.y) && std::isfinite(npos.z) &&
+ 		                   std::isfinite(nrot.x) && std::isfinite(nrot.y) && std::isfinite(nrot.z) &&
+ 		                   std::isfinite(nrot.w) && std::isfinite(nvel.x) && std::isfinite(nvel.y) &&
+ 		                   std::isfinite(nvel.z);
+-		bool pose_insane = pose_finite && m_vec3_len(npos) > 1000.0f; // room-scale; >1 km = diverged
+-		if (!pose_finite || pose_insane) {
+-			slam_consec_bad++;
+-			SLAM_WARN("Dropping divergent SLAM pose (finite=%d |p|=%.1f m) %d/%d", pose_finite,
+-			          pose_finite ? (double)m_vec3_len(npos) : 0.0, slam_consec_bad, SLAM_MAX_CONSEC_BAD);
+-			if (slam_consec_bad >= SLAM_MAX_CONSEC_BAD) {
++		const float position_m = pose_finite ? m_vec3_len(npos) : 0.0f;
++		const float velocity_mps = pose_finite ? m_vec3_len(nvel) : 0.0f;
++		const float quaternion_norm =
++		    pose_finite ? std::sqrt(nrot.x * nrot.x + nrot.y * nrot.y + nrot.z * nrot.z + nrot.w * nrot.w)
++		                : 0.0f;
++		const float anchor_distance_m = pose_finite && t.safety.have_anchor
++		                                    ? m_vec3_len(m_vec3_sub(npos, t.safety.anchor))
++		                                    : 0.0f;
++		const float step_m = pose_finite && t.safety.have_last_good
++		                         ? m_vec3_len(m_vec3_sub(npos, t.safety.last_good))
++		                         : 0.0f;
++		const bool pose_bad = !pose_finite || position_m > t.safety.absolute_limit_m ||
++		                      anchor_distance_m > t.safety.radius_limit_m || step_m > t.safety.step_limit_m ||
++		                      velocity_mps > t.safety.velocity_limit_mps || quaternion_norm < 0.5f ||
++		                      quaternion_norm > 1.5f;
++		if (pose_bad) {
++			t.safety.consecutive_bad++;
++			SLAM_WARN("Dropping divergent SLAM pose (finite=%d |p|=%.2fm anchor=%.2fm step=%.2fm "
++			          "|v|=%.2fm/s |q|=%.3f) %d/%d",
++			          pose_finite, (double)position_m, (double)anchor_distance_m, (double)step_m,
++			          (double)velocity_mps, (double)quaternion_norm, t.safety.consecutive_bad,
++			          t.safety.reset_after);
++			if (t.safety.consecutive_bad >= t.safety.reset_after) {
+ 				if (t.vit.tracker_reset(t.tracker) != VIT_SUCCESS) {
+ 					SLAM_WARN("Auto-reset of diverged VIT tracker failed");
+ 				} else {
+-					SLAM_INFO("Auto-reset VIT tracker after sustained divergence");
++					SLAM_INFO("Auto-reset VIT tracker after %d divergent poses", t.safety.consecutive_bad);
+ 				}
+-				slam_consec_bad = 0;
++				t.safety.consecutive_bad = 0;
++				t.safety.have_anchor = false;
++				t.safety.have_last_good = false;
+ 			}
+ 			t.vit.pose_destroy(pose);
+ 			continue;
+ 		}
+-		slam_consec_bad = 0;
++		t.safety.consecutive_bad = 0;
++		if (!t.safety.have_anchor) {
++			t.safety.anchor = npos;
++			t.safety.have_anchor = true;
++			SLAM_INFO("SLAM session anchor set at [%.3f, %.3f, %.3f]m", (double)npos.x, (double)npos.y,
++			          (double)npos.z);
++		}
++		t.safety.last_good = npos;
++		t.safety.have_last_good = true;
+ 
+ 		// Last relation
+ 		xrt_space_relation lr = XRT_SPACE_RELATION_ZERO;
+@@ -1065,6 +1102,10 @@ setup_ui(TrackerSlam &t)
+ 		vit_result_t vres = t.vit.tracker_reset(t.tracker);
+ 		if (vres != VIT_SUCCESS) {
+ 			SLAM_WARN("Failed to reset VIT tracker");
++		} else {
++			t.safety.consecutive_bad = 0;
++			t.safety.have_anchor = false;
++			t.safety.have_last_good = false;
+ 		}
+ 	};
+ 	t.reset_state_btn.cb = reset_state_cb;
+@@ -1678,6 +1719,30 @@ t_slam_create(struct xrt_frame_context *xfctx,
+ 
+ 	t.pred_type = config->prediction;
+ 
++	t.safety.absolute_limit_m = debug_get_float_option("SLAM_DIVERGENCE_ABSOLUTE_M", 20.0f);
++	t.safety.radius_limit_m = debug_get_float_option("SLAM_DIVERGENCE_RADIUS_M", 4.5f);
++	t.safety.step_limit_m = debug_get_float_option("SLAM_DIVERGENCE_STEP_M", 2.0f);
++	t.safety.velocity_limit_mps = debug_get_float_option("SLAM_DIVERGENCE_VELOCITY_MPS", 10.0f);
++	t.safety.reset_after = (int)debug_get_num_option("SLAM_DIVERGENCE_RESET_FRAMES", 3);
++	if (t.safety.absolute_limit_m < 1.0f) {
++		t.safety.absolute_limit_m = 1.0f;
++	}
++	if (t.safety.radius_limit_m < 1.0f) {
++		t.safety.radius_limit_m = 1.0f;
++	}
++	if (t.safety.step_limit_m < 0.1f) {
++		t.safety.step_limit_m = 0.1f;
++	}
++	if (t.safety.velocity_limit_mps < 1.0f) {
++		t.safety.velocity_limit_mps = 1.0f;
++	}
++	if (t.safety.reset_after < 1) {
++		t.safety.reset_after = 1;
++	}
++	SLAM_INFO("Divergence guard: absolute=%.1fm anchor-radius=%.1fm step=%.1fm velocity=%.1fm/s reset=%d",
++	          (double)t.safety.absolute_limit_m, (double)t.safety.radius_limit_m,
++	          (double)t.safety.step_limit_m, (double)t.safety.velocity_limit_mps, t.safety.reset_after);
++
+ 	t.filter.use_one_euro_position_filter = debug_get_bool_option("SLAM_ONE_EURO_POSITION", false);
+ 	t.filter.use_one_euro_orientation_filter = debug_get_bool_option("SLAM_ONE_EURO_ORIENTATION", false);
+ 	t.filter.pos_min_cutoff = debug_get_float_option("SLAM_ONE_EURO_POSITION_MIN_CUTOFF", t.filter.pos_min_cutoff);
