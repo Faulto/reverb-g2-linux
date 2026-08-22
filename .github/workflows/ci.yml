@@ -47,7 +47,7 @@ jobs:
 
       - name: Verify Monado patch series against pinned source
         run: |
-          git clone --filter=blob:none https://github.com/AshishKumar4/monado-wmr.git /tmp/monado-wmr
+          git clone https://github.com/AshishKumar4/monado-wmr.git /tmp/monado-wmr
           git -C /tmp/monado-wmr checkout --detach 9893ba4cb0dabe45e2383c2270fa0f3d4ed79ab2
           source scripts/setup-index-controllers.sh
           apply_verified_series Monado /tmp/monado-wmr "$GITHUB_WORKSPACE/patches/monado-wmr"
@@ -63,7 +63,7 @@ jobs:
 
       - name: Verify Basalt patch series against pinned source
         run: |
-          git clone --filter=blob:none https://gitlab.freedesktop.org/mateosss/basalt.git /tmp/basalt
+          git clone https://gitlab.freedesktop.org/mateosss/basalt.git /tmp/basalt
           git -C /tmp/basalt checkout --detach df6e970c8da7636eb401a09e3317fbeaaf829b9a
           source scripts/setup-index-controllers.sh
           apply_verified_series Basalt /tmp/basalt "$GITHUB_WORKSPACE/patches/basalt-wmr"
