@@ -208,14 +208,22 @@ save_settings() {
     [[ "$smoothing" =~ ^(off|position-light|position|full)$ ]] || die 'Smoothing must be off, position-light, position, or full.'
     [[ "$prediction" =~ ^(none|pose-only|gyro|accel-gyro|dead-reckoning)$ ]] || die 'Invalid SLAM prediction mode.'
     [[ "$angular" =~ ^(true|false)$ ]] || die 'Angular prediction must be true or false.'
-    [[ "$strength" =~ ^[0-9]+$ ]] && [ "$strength" -le 150 ] || die 'Angular prediction strength must be 0..150 percent.'
+    if ! [[ "$strength" =~ ^[0-9]+$ ]] || [ "$strength" -gt 150 ]; then
+        die 'Angular prediction strength must be 0..150 percent.'
+    fi
     [[ "$recall" =~ ^(off|front|all)$ ]] || die 'Feature recall must be off, front, or all.'
     [[ "$autoexposure" =~ ^(true|false)$ ]] || die 'Camera auto-exposure must be true or false.'
     [[ "$unify_exposure" =~ ^(true|false)$ ]] || die 'Unified camera exposure must be true or false.'
     [[ "$height_recovery" =~ ^(true|false)$ ]] || die 'Upright height recovery must be true or false.'
-    [[ "$recovery_delay" =~ ^[0-9]+$ ]] && [ "$recovery_delay" -ge 3 ] && [ "$recovery_delay" -le 30 ] || die 'Upright height recovery delay must be 3..30 seconds.'
-    [[ "$volume" =~ ^[0-9]+$ ]] && [ "$volume" -le 100 ] || die 'Volume must be 0..100.'
-    [[ "$start_delay" =~ ^[0-9]+$ ]] && [ "$start_delay" -le 60 ] || die 'Startup positioning delay must be 0..60 seconds.'
+    if ! [[ "$recovery_delay" =~ ^[0-9]+$ ]] || [ "$recovery_delay" -lt 3 ] || [ "$recovery_delay" -gt 30 ]; then
+        die 'Upright height recovery delay must be 3..30 seconds.'
+    fi
+    if ! [[ "$volume" =~ ^[0-9]+$ ]] || [ "$volume" -gt 100 ]; then
+        die 'Volume must be 0..100.'
+    fi
+    if ! [[ "$start_delay" =~ ^[0-9]+$ ]] || [ "$start_delay" -gt 60 ]; then
+        die 'Startup positioning delay must be 0..60 seconds.'
+    fi
     mkdir -p "$SETTINGS_DIR"
     tmp="$(mktemp "$SETTINGS_DIR/session.conf.XXXXXX")"
     printf 'G2_EYE_HEIGHT=%s\nG2_SMOOTHING=%s\nG2_PREDICTION_MODE=%s\nG2_ANGULAR_PREDICTION=%s\nG2_ANGULAR_PREDICTION_STRENGTH=%s\nG2_FEATURE_RECALL=%s\nG2_CAMERA_AUTOEXPOSURE=%s\nG2_CAMERA_UNIFY_EXPOSURE=%s\nG2_HEIGHT_RECOVERY=%s\nG2_HEIGHT_RECOVERY_DELAY=%s\nG2_AUDIO_VOLUME=%s\nG2_START_DELAY=%s\n' \
@@ -513,10 +521,14 @@ stop_vr_processes() {
         pkill -TERM -x "$process_name" 2>/dev/null || true
     done
     while read -r process_pid; do
-        [ -n "$process_pid" ] && kill -TERM "$process_pid" 2>/dev/null || true
+        if [ -n "$process_pid" ]; then
+            kill -TERM "$process_pid" 2>/dev/null || true
+        fi
     done < <(pgrep -f "$STEAMVR/tools/steamvr_room_setup/.*/steamvr_room_setup( |$)" || true)
     while read -r process_pid; do
-        [ -n "$process_pid" ] && kill -TERM "$process_pid" 2>/dev/null || true
+        if [ -n "$process_pid" ]; then
+            kill -TERM "$process_pid" 2>/dev/null || true
+        fi
     done < <(pgrep -f "$SPACECAL_DRIVER/bin/linux64/space-calibrator-real( |$)" || true)
 
     for _i in $(seq 1 30); do
@@ -602,7 +614,9 @@ start_space_calibrator() {
     # owned by our detached service. The overlay enables SteamVR auto-launch during startup, so a
     # second process can be spawned just after ours connects; remove that late duplicate too.
     for process_pid in "${spacecal_pids[@]}"; do
-        [ -n "$process_pid" ] && kill -TERM "$process_pid" 2>/dev/null || true
+        if [ -n "$process_pid" ]; then
+            kill -TERM "$process_pid" 2>/dev/null || true
+        fi
     done
     for _i in $(seq 1 30); do
         if ! pgrep -f "^$SPACECAL_DRIVER/bin/linux64/space-calibrator-real( |$)" >/dev/null; then

@@ -234,8 +234,9 @@ build_sources() {
     [ -d "$BASALT/.git" ] || die "Basalt source is missing; run '$0 sources' first"
     [ -d "$SPACECAL_SOURCE/.git" ] || die "Space Calibrator source is missing; run '$0 sources' first"
     steamvr="${STEAMVR_DIR:-$(find_steamvr 2>/dev/null || true)}"
-    [ -n "$steamvr" ] && [ -f "$steamvr/bin/linux64/libopenvr_api.so" ] || \
+    if [ -z "$steamvr" ] || [ ! -f "$steamvr/bin/linux64/libopenvr_api.so" ]; then
         die 'native SteamVR was not found; install it with Steam or set STEAMVR_DIR'
+    fi
     [ -f "$MONADO/src/external/openvr_includes/openvr.h" ] || \
         die 'the pinned Monado source does not contain its OpenVR headers'
 

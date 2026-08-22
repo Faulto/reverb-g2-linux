@@ -102,7 +102,9 @@ check_host() {
 find_usb_device() {
     local vendor="$1" product="$2" dev
     for dev in /sys/bus/usb/devices/*; do
-        [ -r "$dev/idVendor" ] && [ -r "$dev/idProduct" ] || continue
+        if [ ! -r "$dev/idVendor" ] || [ ! -r "$dev/idProduct" ]; then
+            continue
+        fi
         [ "$(cat "$dev/idVendor")" = "$vendor" ] || continue
         [ "$(cat "$dev/idProduct")" = "$product" ] || continue
         printf '%s\n' "$dev"
