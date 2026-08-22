@@ -141,7 +141,7 @@ while true; do
         'Stop Beat Saber only' 'Close the game while leaving the headset, tracking and SteamVR active' \
         'Ready check' 'Verify one calibrator and sensible floor/controller poses' \
         'Set floor again (10 s)' 'Redo the automatic floor if needed; stand at play-centre during the countdown' \
-        'Beat Saber mods' 'Open BSManager for version-matched mods, maps, and game versions' \
+        'Beat Saber mods' 'Open an existing native BSManager install for mods, maps, and game versions' \
         'NVIDIA patch status' 'Match the loaded driver to its source tree and audit every required G2 patch' \
         'Patch NVIDIA driver' 'Validate, patch and rebuild the matching open driver (sudo and reboot required)' \
         'Boot-image check' 'Compare the on-disk and embedded nvidia-modeset modules where supported' \

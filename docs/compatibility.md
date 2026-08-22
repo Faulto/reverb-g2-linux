@@ -46,6 +46,8 @@ both G2 panels light properly, run at 90 Hz, and remain stable during real head 
   repeatable patch series with tracking reliable enough for this launcher.
 - **Flatpak Steam.** This setup expects native Steam and SteamVR paths, runtime files, and
   driver registration.
+- **Flatpak BSManager integration.** BSManager itself offers a Flatpak, but this launcher
+  currently reads the native app's config and executable. Use a native BSManager package.
 - **NVIDIA's proprietary kernel module.** The display patches target NVIDIA's published
   open-module source.
 - **Automatic patching of an unknown NVIDIA family.** The tool refuses to guess.
@@ -67,7 +69,8 @@ what the launcher found on its own.
 | `BASALT_DIR` | Basalt source and build folder |
 | `SPACECAL_DRIVER_DIR` | Installed Space Calibrator SteamVR driver |
 | `G2_DRM_CONNECTOR` | Exact G2 DRM connector, for diagnosis only |
-| `BSMANAGER` | BSManager executable |
+| `BSMANAGER` | Native BSManager executable |
+| `BSMANAGER_CONFIG` | Native BSManager `config.json` file |
 | `NVIDIA_SOURCE_DIR` | Exact NVIDIA open-module source folder |
 
 ## Sending a compatibility report

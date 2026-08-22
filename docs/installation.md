@@ -140,17 +140,12 @@ the control panel's **Settings** button.
 
 ## 8. Optional: modded Beat Saber
 
-Install [BSManager](https://github.com/Zagrios/bs-manager), choose its content and Proton
-folders, and install a Beat Saber version that has the mods you want. Launch that version
-once from BSManager so it can finish setting up.
+This repo does not install BSManager, download a Beat Saber version, or choose mods. It reads
+an existing native BSManager setup and launches its last-used modded copy directly.
 
-The default BSManager content folder under `~/.local/share/BSManager` is fine with Proton.
-The launcher finds BSManager's chosen folders and last-used game version, even if the games
-are on another drive.
-
-Put `bs-manager` on `PATH`, install it at `~/.local/opt/bs-manager/bs-manager`, or set the
-`BSMANAGER` environment variable. You can then use **Start VR + modded Beat Saber** from the
-control panel.
+Follow [Setting up BSManager](bsmanager.md) for the Linux install choices, Proton folder,
+content folder, game download, Core mods, first launch, and the check that connects it to
+this control panel.
 
 For an ordinary Steam copy of Beat Saber, add this Steam launch option:
 

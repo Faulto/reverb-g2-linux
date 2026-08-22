@@ -39,7 +39,8 @@ the older [Wintch/reverb-g2](https://github.com/Wintch/reverb-g2) research repo.
 - Starts SteamVR only after the hardware and display checks pass.
 - Sets a fresh floor and play centre each time VR starts.
 - Limits bad tracking jumps and helps correct small height drift.
-- Starts modded Beat Saber directly, without opening SteamVR's desktop view.
+- Starts an existing BSManager-managed Beat Saber copy directly, without opening SteamVR's
+  desktop view.
 - Gives you simple buttons for settings, diagnostics, game restart, volume, and shutdown.
 
 ## Known rough edges
@@ -172,7 +173,9 @@ Wait for the checks-passed message before picking up the headset. Click **Begin*
 the 10-second countdown to stand at play centre, upright and facing forward. Tracking starts
 when the countdown reaches zero.
 
-For modded Beat Saber, click **Start VR + modded Beat Saber** instead.
+For modded Beat Saber, first complete the separate [BSManager setup](docs/bsmanager.md), then
+click **Start VR + modded Beat Saber** instead. This repo launches and checks an existing
+managed copy; it does not download BSManager, Beat Saber versions, or mods for you.
 
 You can also use the terminal:
 
@@ -245,6 +248,7 @@ Read [compatibility](docs/compatibility.md) for the exact list.
 
 - [Install everything](docs/installation.md)
 - [Use the launcher and control panel](docs/using-the-launcher.md)
+- [Set up BSManager and modded Beat Saber](docs/bsmanager.md)
 - [Fix common problems](docs/troubleshooting.md)
 - [Handle NVIDIA updates](docs/nvidia-driver.md)
 - [Check tested hardware](docs/compatibility.md)

@@ -131,6 +131,7 @@ if [ -z "${BSMANAGER:-}" ]; then
         BSMANAGER="$HOME/.local/opt/bs-manager/bs-manager"
     fi
 fi
+BSMANAGER_CONFIG="${BSMANAGER_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/bs-manager/config.json}"
 NVIDIA_MANAGER="$REPO/scripts/nvidia-g2-patch-manager.sh"
 APP_ID=620980
 
@@ -249,15 +250,16 @@ show_paths() {
     if [ -r "$BEAT_SABER_DIR/BeatSaberVersion.txt" ]; then
         version="$(tr -d '\r\n' < "$BEAT_SABER_DIR/BeatSaberVersion.txt")"
     fi
-    if [ -r "${XDG_CONFIG_HOME:-$HOME/.config}/bs-manager/config.json" ]; then
-        proton="$(sed -n 's/^[[:space:]]*"proton-folder"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${XDG_CONFIG_HOME:-$HOME/.config}/bs-manager/config.json" | tail -1)"
-        content="$(sed -n 's/^[[:space:]]*"installation-folder"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${XDG_CONFIG_HOME:-$HOME/.config}/bs-manager/config.json" | tail -1)"
+    if [ -r "$BSMANAGER_CONFIG" ]; then
+        proton="$(sed -n 's/^[[:space:]]*"proton-folder"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$BSMANAGER_CONFIG" | tail -1)"
+        content="$(sed -n 's/^[[:space:]]*"installation-folder"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$BSMANAGER_CONFIG" | tail -1)"
     fi
     printf 'Steam root: %s\n' "${DETECTED_STEAM_ROOT:-not detected}"
     printf 'SteamVR: %s\n' "$STEAMVR"
     printf 'Beat Saber: %s\n' "${BEAT_SABER_DIR:-not detected}"
     printf 'Beat Saber version: %s\n' "$version"
     printf 'BSManager: %s\n' "$BSMANAGER"
+    printf 'BSManager config: %s\n' "$BSMANAGER_CONFIG"
     printf 'BSManager content: %s\n' "${content:-not configured}"
     printf 'Proton: %s\n' "${proton:-not configured}"
     printf 'Monado: %s\n' "$MONADO"
@@ -960,7 +962,9 @@ set_floor() {
 }
 
 open_mod_manager() {
-    require_file "$BSMANAGER"
+    if [ ! -f "$BSMANAGER" ]; then
+        die "BSManager was not found at $BSMANAGER. Install its native Linux package, then follow $REPO/docs/bsmanager.md"
+    fi
     [ -x "$BSMANAGER" ] || die "BSManager is not executable: $BSMANAGER"
     mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/reverb-g2"
     nohup "$BSMANAGER" >"${XDG_CACHE_HOME:-$HOME/.cache}/reverb-g2/bs-manager.log" 2>&1 &
@@ -988,8 +992,8 @@ play_game() {
 }
 
 bsmanager_last_version_info() {
-    local config="${XDG_CONFIG_HOME:-$HOME/.config}/bs-manager/config.json"
-    [ -r "$config" ] || die "BSManager config is missing: $config"
+    local config="$BSMANAGER_CONFIG"
+    [ -r "$config" ] || die "BSManager setup is incomplete: $config is missing. Open native BSManager once and follow $REPO/docs/bsmanager.md"
     python3 - "$config" <<'PY'
 import json
 import sys
