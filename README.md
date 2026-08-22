@@ -102,6 +102,17 @@ The G2 cable has separate USB 2 and USB 3 branches. One half can fail or connect
 The preflight checks every part separately. If the SuperSpeed side is slow, try another USB
 3 port or a powered hub. With a v1 cable, power-cycling the cable box can also help.
 
+### One display goes black, then the other
+
+On our G2 with a v1 cable, high headset volume could make one panel switch off, followed by
+the other. Both would return a few seconds later, sometimes with the tracking height shifted.
+This appears to be another v1 cable or cable-box power problem.
+
+Starting the G2 at 65% volume stopped the panel resets in testing, so that is now the
+default. SteamVR's volume slider does not reliably control this setup; use the control panel
+volume setting instead. If it still happens, power-cycle the cable box and rerun the USB
+check.
+
 ### SteamVR's desktop view crashes Steam
 
 This happened repeatedly on our test machine. The launcher starts Steam with PipeWire
@@ -187,7 +198,7 @@ New installs now start with the profile that worked best in our Beat Saber testi
 | Camera auto-exposure | On | Best general lighting behaviour |
 | Unified camera exposure | Off | The safer default; unified exposure is experimental |
 | Height recovery | On, after 8 seconds | Corrects small height drift while you stand still and level |
-| Headset volume | 65% | Comfortable starting volume on the tested headset |
+| Headset volume | 65% | Comfortable, and stopped v1-cable panel power resets in testing |
 | Startup countdown | 10 seconds | Time to move from the PC to play centre |
 
 Your saved file at `~/.config/reverb-g2/session.conf` always wins over these defaults. An

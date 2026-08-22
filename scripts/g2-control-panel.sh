@@ -90,7 +90,7 @@ edit_settings() {
         --field='Use one exposure for all four cameras — experimental:CHK' "$unify_exposure" \
         --field='Recover false height drift while upright — avoids mild-drift grey screens:CHK' "$height_recovery" \
         --field='Seconds continuously still and level before height recovery:NUM' "$recovery_delay!3..30!1!0" \
-        --field='Headset volume at start:NUM' "$volume!0..100!1!0" \
+        --field='Headset volume at start — 65% avoided v1-cable panel resets:NUM' "$volume!0..100!1!0" \
         --field='Positioning countdown before tracking:NUM' "$start_delay!0..60!1!0" \
         --button='Cancel:1' --button='Save:0')" || return 0
     IFS='|' read -r height smoothing_label prediction_label angular strength recall_label \

@@ -50,6 +50,27 @@ This setup targets the G2's full 4320×2160 combined mode at 90 Hz. A successful
 not prove the screens are healthy. Put on the headset and make sure both panels are lit and
 stable. Stop immediately if they flicker badly or make you feel unwell.
 
+## One panel goes black, then the other, and both come back
+
+This happened on the tested G2 v1 cable when the headset volume was high. One display would
+switch off, the other would follow a few seconds later, and then both would recover. The
+reset could also leave the tracking height wrong.
+
+Set the headset volume to 65% with the control panel, or run:
+
+```bash
+./scripts/beat-saber-index.sh volume 65
+```
+
+This stopped the panel resets on the tested headset. SteamVR's volume slider is not reliable
+here, so use the launcher control even if SteamVR already shows a lower value. The exact
+cause has not been confirmed, but the symptom appears to be related to the v1 cable or
+cable-box power limit.
+
+If the displays still reset, power-cycle the cable box and rerun the full USB check. Once
+the panels are stable, use the stillness height correction or **Set floor again** if the
+reset moved your play space.
+
 ## SteamVR cannot acquire the display
 
 Close GPU-heavy programs and try again. Low free VRAM has allowed the SteamVR compositor to

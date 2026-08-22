@@ -148,3 +148,11 @@ control panel or one of these commands instead:
 ./scripts/beat-saber-index.sh volume +5%
 ./scripts/beat-saber-index.sh volume mute
 ```
+
+The 65% default is also a display-stability workaround for the v1 cable. At higher headset
+volume, the tested G2 sometimes switched off one panel and then the other before recovering.
+Keeping the startup volume at 65% stopped those resets. The exact electrical cause has not
+been confirmed, but the behaviour points to the v1 cable or cable-box power limit.
+
+If a panel reset shifts your tracking height, first stand upright, look level, and remain
+still for the height correction. Use **Set floor again** if the full play space has moved.
