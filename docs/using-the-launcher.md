@@ -113,10 +113,19 @@ the next time VR starts.
 ## Beat Saber performance
 
 If Beat Saber starts stuttering, check its SteamVR render resolution first. SteamVR can
-occasionally choose a much higher per-game resolution than expected.
+occasionally choose a much higher per-game resolution than expected. Do not assume 100% is
+correct: the pixel size behind that percentage can itself be the problem.
 
-Open **SteamVR Settings → Video → Per-Application Video Settings → Beat Saber** and start at
-100%. Lower it if your GPU still cannot hold the frame rate.
+Open **SteamVR Settings → Video → Per-Application Video Settings → Beat Saber**, switch to a
+custom value, and check the dimensions shown. The G2 has 2160×2160 pixels per eye, or
+4320×2160 across both panels. A render target around the physical panel resolution is a good
+performance check, but it may look blurry because the image is warped for the lenses. The
+tested system used a custom 4320×2160 setting as its normal clarity/performance balance.
+
+Restart Beat Saber every time you change this setting. In testing, the running game often
+kept the old render size. Use **Restart modded Beat Saber** so SteamVR, the floor, and Space
+Calibrator stay running. Lower the custom resolution if the game still stutters; raise it
+gradually if performance is good but the image is too soft.
 
 If a map freezes or the controllers load on the floor, click **Restart modded Beat Saber**:
 
