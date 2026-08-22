@@ -1,214 +1,178 @@
-# reverb-g2
+# Reverb G2 Linux
 
-Running an [HP Reverb G2](https://www.hp.com/gb-en/tech-takes/gaming/review/hp-reverb-g2-review.html)
-on Linux — patches, tools, and a procedure manual covering everything from USB topology to
-the NVIDIA display driver.
+A setup and session manager for running the HP Reverb G2 on Linux.
 
-The headset is discontinued and Microsoft removed Windows Mixed Reality in Windows 11 24H2,
-so on Windows a G2 now needs either 23H2 or [mbucchia's Oasis
-driver](https://github.com/mbucchia/Oasis-Driver-for-Windows-Mixed-Reality). Good optics
-going cheap on the used market, with no vendor behind them — which is the whole reason this
-repo exists.
+This project turns a working G2 configuration into a repeatable workflow. It builds the
+required VR stack, checks the headset before every session, starts SteamVR with the right
+runtime and tracking configuration, manages the NVIDIA kernel patches needed for 90 Hz,
+and provides recovery tools for the failures we encountered during real play.
 
-Everything documented here was measured on a real rig. Where something does **not** work,
-the manual says why and what was tried, including the conclusions that turned out to be
-wrong. Several of them did.
+The current supported controller setup is:
 
-**Scope.** The repo is named for the headset, not for an operating system, but effectively
-all of the engineering here targets Linux — that is where the headset is not supported and
-where the work was needed. Chapters 07, 09, 10 and 12 are Windows-side: they exist because
-reading what Windows does to the panel is how several Linux questions got answered.
+- HP Reverb G2 for display, audio, and head tracking
+- Project-VR Monado and Basalt for the headset
+- native Steam and SteamVR
+- two Lighthouse base stations, two Watchman receivers, and Valve Index controllers
+- OpenVR Space Calibrator to align the G2 and Lighthouse tracking spaces
 
-## The one rule that matters
+Native G2 motion controllers are not part of this supported build. The earlier controller
+tracking experiments remain in the original
+[Wintch/reverb-g2](https://github.com/Wintch/reverb-g2) research repository.
 
-**Verification is physical. Somebody has to put the headset on and look.**
+## What the tool handles
 
-The Vulkan/OpenXR layer reports a successful modeset and a happy 90.0 fps with the panel
-completely dark. Every failure documented here is invisible from above the driver. Any
-conclusion based on logs, `xrandr`, or a reported framerate is worthless on this hardware —
-and this project produced four confidently wrong conclusions that were all reached that way.
+- Installs distribution dependencies on Arch, Debian/Ubuntu, and Fedora.
+- Clones pinned Monado, Basalt, and Space Calibrator revisions and applies a reproducible
+  patch series.
+- Registers the Monado and Space Calibrator SteamVR drivers for the current user.
+- Detects Steam libraries, SteamVR, Beat Saber, the G2 display connector, PipeWire audio,
+  Watchman receivers, and NVIDIA source/DKMS paths without hard-coded ports or usernames.
+- Checks both halves of the G2 USB cable, the tracking cameras, control interface, audio,
+  udev permissions, GPU driver, and controller receivers before starting VR.
+- Patches tested NVIDIA open-kernel-module releases, rebuilds DKMS, refreshes the boot
+  image, and audits the result after a driver update.
+- Starts and stops SteamVR, powers the panel safely, launches Space Calibrator, sets the
+  floor from a validated standing pose, and restores the preferred OpenXR runtime on exit.
+- Applies tracking guards for runaway SLAM poses, height drift, unsafe room-scale movement,
+  and excessive smoothing or prediction.
+- Launches a BSManager-managed modded Beat Saber instance without using SteamVR's desktop
+  overlay.
+- Exposes the common actions and tracking settings through a desktop control panel.
 
-## What works today (2026-08)
+## Current limits
 
-There are now two distinct stacks. Do not mix their source trees or patch
-directories:
+This is not yet verified on every Linux, GPU, desktop, or G2 cable revision. The complete
+playable setup has been tested on Arch Linux, Plasma Wayland, an RTX 5080, NVIDIA 610 open
+modules, a G2 v1 cable, and Index controllers. The display and NVIDIA work was also tested
+on Debian with an RTX 3060 Ti and NVIDIA 595 open modules.
 
-- **Supported, reproducible profile:** G2 display/head tracking through
-  Project-VR Monado, native SteamVR, Lighthouse base stations, and Index
-  controllers. This is the path physically verified with Beat Saber and built
-  by `scripts/setup-index-controllers.sh`.
-- **Research profile:** native G2-controller constellation tracking through
-  Monado and xrizer. It has extensive live hardware evidence, but the exported
-  `patches/monado/` directory records several divergent development lineages
-  and is not one installable patch series. It is preserved for continued
-  engineering, not advertised as a clean install.
+The NVIDIA patch manager accepts only the tested 595 and 610 driver families. It refuses a
+new or incompatible source layout instead of guessing. AMD and Intel display paths do not
+need the NVIDIA patches, but they still require fresh hardware testing before they can be
+called supported.
 
-| Area | State |
-|---|---|
-| Headset display | ✅ 60 Hz via Monado direct mode, X11 and Wayland |
-| 90 Hz | ✅ clean at the G2 panel's 4320×2160 native resolution; lower modes remain diagnostic fallbacks — see below |
-| Head tracking, 3DoF | ✅ solid (IMU, `WMR_SLAM=0`) |
-| Head tracking, 6DoF | ✅ real Basalt SLAM, confirmed across multiple full game sessions (`docs/23`) — occasional divergence on long-uptime sessions, see `docs/06` |
-| 360 / VR180 player | ✅ our own, built on `hello_xr`; 8K stereo at 60 fps |
-| Headset audio | ✅ works electrically; shares a marginal USB2 contact with the panel, see `docs/22` |
-| G2 controllers | 🧪 6DoF research path verified live in Aircar; current exported archive is not cleanly reproducible, and tracking quality remains below commercial-driver reliability (`docs/03`, `docs/55`) |
-| Index controllers | ✅ two Watchman receivers + Lighthouse + OpenVR Space Calibrator, physically verified in Beat Saber (`docs/67`) |
-| SteamVR (native) | ✅ supported profile works through Project-VR `driver_monado`; the earlier stock/lab Monado path remained lease-blocked |
-| SteamVR titles (via [xrizer](https://github.com/The-personified-devil/xrizer)) | ✅ multiple titles confirmed working end to end, bypassing `vrmonitor` entirely — see `docs/23` |
-| Cable/connector | ⚠️ known marginal contact (USB2 branch + panel power); reseat procedure in `docs/22`, not yet replaced |
+The tool does not install or update the NVIDIA package itself. Your distribution remains
+responsible for that. After a package update, this project reapplies and rebuilds the G2
+patches against the new on-disk driver when that release is supported.
 
-## What came out of this: an NVIDIA driver bug
+See [compatibility](docs/compatibility.md) for the tested matrix and known boundaries.
 
-While chasing 90 Hz we root-caused a separate bug in the NVIDIA display driver, filed
-upstream as
-**[open-gpu-kernel-modules#1275](https://github.com/NVIDIA/open-gpu-kernel-modules/pull/1275)**
-(still open and without a review as of 2026-08-22):
+## Quick start
 
-> `nvDpyGetOutputColorFormatInfo()` treats "the EDID did not declare a color depth" as "the
-> sink wants 6 bpc" and drives the DisplayPort link at 18 bpp. The DSI branch of the same
-> function already treats that input as 8 bpc. This affects **any** DisplayPort sink that
-> leaves EDID Color Bit Depth undefined — on an ordinary monitor it shows up as banding,
-> which is easy to misattribute to the panel.
+Install native Steam and SteamVR first, launch each once, then clone this repository:
 
-Full write-up in [`docs/13-bug-6bpc.md`](docs/13-bug-6bpc.md), and in the
-[NVIDIA forum thread](https://forums.developer.nvidia.com/t/379240).
+```bash
+git clone https://github.com/Faulto/reverb-g2-linux.git
+cd reverb-g2-linux
+```
 
-**It was part of the fix — confirmed on NVIDIA 595 in 2026-08.** Patch 0004 stayed
-unconfirmed for two extra days for a mundane reason, not a second bug: every retest after
-applying it kept reusing the synthetic, injected EDID timings from the earlier
-investigation instead of the panel's plain native mode.
-[`docs/16-lab-vblank.md`](docs/16-lab-vblank.md) ran a careful factorial across refresh
-rate, vertical blanking, and pixel clock on those injected timings and, correctly, found
-none of them explained anything — the injected timings were never the actual problem. Once
-the plain native EDID mode was retested with the patch applied, both native 90 Hz modes came
-up clean. [`docs/13-bug-6bpc.md`](docs/13-bug-6bpc.md) separately closed the USB/HID side of
-the investigation from the Windows angle: the headset's own status report is byte-identical
-between Linux and Windows, including at the exact moment of a live 60↔90 Hz switch on
-Windows (no special command fires). Filed as
-[NVIDIA bug 5923212](docs/19-nvidia-bug-5923212-followup.md). Full three-day timeline,
-including how the "still open" methodology trap was found, in
-[`docs/21-project-retrospective.md`](docs/21-project-retrospective.md).
-
-NVIDIA 610 still chose the generic 6-bpc minimum after that maximum was fixed.
-Patch 0005 therefore pins both ends of the RGB range to 8 bpc only for the exact
-G2 EDID. The live 610 retest then negotiated 24 bpp and held 4320×2160 at 90 Hz.
-Use `scripts/nvidia-g2-patch-manager.sh`; it selects the tested 595/610 series,
-validates before editing `/usr/src`, rebuilds DKMS, and refreshes the boot image.
-
-## Getting started: supported Index-controller profile
+Build and register the pinned VR stack:
 
 ```bash
 ./scripts/setup-index-controllers.sh deps
 ./scripts/setup-index-controllers.sh all
-sudo install -m 0644 scripts/70-wmr-reverb.rules /etc/udev/rules.d/
+sudo install -m 0644 scripts/70-wmr-reverb.rules /etc/udev/rules.d/70-wmr-reverb.rules
 sudo udevadm control --reload-rules
 ./scripts/install-control-panel.sh
 ```
 
-This path requires native (non-Flatpak) Steam/SteamVR, two Lighthouse base
-stations, two Watchman receiver dongles, and Index controllers. Read
-[`docs/67-beat-saber-index-controllers.md`](docs/67-beat-saber-index-controllers.md)
-for pairing, calibration, BSManager, recovery, and all launcher commands. Read
-[`docs/00-hardware-usb.md`](docs/00-hardware-usb.md) first. If the companion device
-`03f0:0580` is missing from `lsusb`, the problem is the USB port, not the software — and
-you will waste days debugging Monado if you skip that chapter.
+Reconnect the headset after installing the udev rule. NVIDIA users should then audit the
+driver and apply the G2 series if required:
 
-## Daily bring-up
+```bash
+./scripts/nvidia-g2-patch-manager.sh status
+./scripts/nvidia-g2-patch-manager.sh validate
+./scripts/nvidia-g2-patch-manager.sh apply
+```
 
-Every session, in this order — this is the procedure, don't improvise it:
+The apply command requests `sudo`, backs up every changed source file under
+`/var/backups/reverb-g2-nvidia`, rebuilds the kernel modules and boot image, and asks you
+to reboot manually. It never reboots the machine itself.
+
+Finish the one-time SteamVR and controller setup in the
+[installation guide](docs/installation.md).
+
+## Starting VR
+
+Open **Reverb G2 VR Control Panel** from the desktop menu and choose **Start VR**. The
+control panel keeps the hardware checks visible and begins the positioning countdown only
+after they pass.
+
+The command-line equivalent is:
 
 ```bash
 ./scripts/g2-preflight.sh all
 ./scripts/beat-saber-index.sh start-ui
 ```
 
-The launcher dynamically discovers the Steam library, SteamVR driver registry,
-G2 EDID connector, PipeWire node, BSManager instance, and Watchman radios. It
-validates USB negotiation and the NVIDIA patch state before turning tracking
-on, then gives a positioning countdown and sets the standing origin. Nothing
-above is verified until a human has the headset on and looks.
+Stand at play-centre, upright and facing the usual forward direction during the countdown.
+The launcher initializes tracking, confirms SteamVR direct mode at the native
+4320×2160/90 Hz mode, and saves a validated 5×5 m standing space.
 
-The original `preflight.sh`, `bootstrap-lab.sh`, `jack-in-wayland.sh`, and xrizer
-launchers belong to the research profile. `bootstrap-lab.sh sources` is now
-fail-closed because the archived Monado patches are explicitly non-linear.
+For a configured BSManager instance, choose **Start VR + modded Beat Saber** or run:
 
-## Layout
-
-```
-docs/          the manual, one chapter per procedure
-patches/nvidia/            open kernel module patches, incl. the 6 bpc fix
-patches/monado-wmr/        reproducible Project-VR Monado series (Index profile)
-patches/basalt-wmr/        reproducible Basalt series (Index profile)
-patches/monado/            non-linear research archive for native G2 controllers
-patches/hello_xr-player/   the 360/VR180 viewer
-scripts/       tooling: bring-up, EDID surgery, HID capture, diagnostics
-experiments/   the headset's own EDID plus prepared variants for the 90 Hz work
+```bash
+./scripts/beat-saber-index.sh start-modded-ui
 ```
 
-## The manual
+Read [using the launcher](docs/using-the-launcher.md) for calibration, floor recovery,
+tracking settings, Beat Saber, audio, diagnostics, and every command.
 
-| | |
-|---|---|
-| [00](docs/00-hardware-usb.md) | USB topology, the SuperSpeed/USB2 split, and why it breaks |
-| [01](docs/01-bringup-monado.md) | Building and running Monado + Basalt |
-| [02](docs/02-player-360.md) | The 360/VR180 player: projections, pipeline, measurements |
-| [03](docs/03-controllers.md) | Controller state and the 6DoF roadmap |
-| [04](docs/04-lab-90hz.md) | The 90 Hz lab: separate install, patched driver, test protocol |
-| [05](docs/05-resolve.md) | DaVinci Resolve (a separate goal for the same rig) |
-| [06](docs/06-known-issues.md) | What does not work and why, with evidence |
-| [07](docs/07-windows-hid-capture.md) | Capturing the Windows HID traffic (archived — see 09) |
-| [08](docs/08-passthrough-limits.md) | Passthrough and its limits |
-| [09](docs/09-oasis-driver-re.md) | Reverse-engineering the Oasis driver (what Windows sends the panel) |
-| [10](docs/10-resources.md) | External resources |
-| [11](docs/11-linux-hmd-landscape.md) | The state of HMDs on Linux |
-| [12](docs/12-g2-protocol.md) | The G2's own protocol, from USB captures |
-| [13](docs/13-bug-6bpc.md) | The 6 bpc clamp: root cause and patch |
-| [14](docs/14-nvidia-report.md) | The report filed with NVIDIA |
-| [15](docs/15-feedback-triage.md) | Triage of the feedback on that report |
-| [16](docs/16-lab-vblank.md) | The vblank factorial: refresh rate vs. timing shape, run to completion |
-| [17](docs/17-publishing.md) | Preparing this repo for publication |
-| [18](docs/18-monado-upstreaming.md) | Upstreaming the Monado WMR patches |
-| [19](docs/19-nvidia-bug-5923212-followup.md) | Follow-up for the NVIDIA 60Hz-only bug thread |
-| [20](docs/20-desktop-plasma-crash.md) | A Plasma desktop crash hit during the lab work |
-| [21](docs/21-project-retrospective.md) | Project retrospective: machines, timeline, fixes, credits |
-| [22](docs/22-cable-connector-diagnosis.md) | Link anatomy + piece-by-piece diagnosis of cable/connector/power |
-| [23](docs/23-game-compatibility.md) | Game-by-game compatibility results via xrizer |
-| [67](docs/67-beat-saber-index-controllers.md) | Supported G2 + Lighthouse/Index + Beat Saber path |
-| [68](docs/68-portability-and-public-release.md) | Support matrix, portability boundaries, and public-release audit |
-| [30](docs/30-machine-handoff-protocol.md) | The two-machine topology, and the protocol for handing work off between them without it going stale |
-| [34](docs/34-tracking-quaternions-slam.md) | 6DoF tracking architectures, visual-inertial SLAM, and quaternion/Lie-algebra math reference |
+## NVIDIA driver updates
 
-## Reference hardware
+Run the patch audit after every NVIDIA package update and before starting VR:
 
-Debian 13 (trixie) · kernel 6.12 · RTX 3060 Ti (GA104) · HP Reverb G2 (rev B) ·
-Ryzen 5 5600X · NVIDIA 595.71.05 open kernel modules
+```bash
+./scripts/beat-saber-index.sh nvidia status
+```
 
-The supported Index profile was also physically verified on Arch Linux,
-Plasma Wayland, RTX 5080, NVIDIA 610 open modules, a G2 v1 cable, two Lighthouse
-base stations, two Watchman receivers, and Index controllers. This is a support
-matrix, not a promise that every Linux/GPU/compositor combination is already
-verified; see [`docs/68`](docs/68-portability-and-public-release.md).
+If the installed source tree is supported but unpatched, apply it and reboot:
 
-## Contributing
+```bash
+./scripts/beat-saber-index.sh nvidia apply
+```
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) before sending changes. The highest-value
-work now is expanding the physical support matrix and turning the G2-controller
-research history into one pinned, cleanly reproducible source branch.
+The manager discovers the installed and running driver versions, matching `/usr/src` tree,
+DKMS module, kernel, initramfs implementation, and G2 connector dynamically. It also
+detects a pending reboot when the running driver and installed module differ. Details and
+recovery steps are in [NVIDIA driver management](docs/nvidia-driver.md).
 
-What would actually move this forward now:
+## Documentation
 
-- **A DisplayPort AUX-channel capture** (a logic analyzer on the AUX+/AUX- pins, decoding
-  DPCD read/writes during a 60→90 Hz switch) is the one layer nothing in this repo has been
-  able to look at yet — mainly useful now to confirm the backlight-duty hypothesis behind
-  the (also resolved) flicker, not the core bug anymore. See the open item at the end of
-  [`docs/13-bug-6bpc.md`](docs/13-bug-6bpc.md).
-- **Fresh AMD/Intel, X11, GNOME, Fedora, Ubuntu, and G2 rev2-cable reports** using
-  the template in `docs/68`, so untested combinations can move into the verified matrix.
+- [Install the stack](docs/installation.md)
+- [Use the control panel and launcher](docs/using-the-launcher.md)
+- [Manage NVIDIA patches and driver updates](docs/nvidia-driver.md)
+- [Troubleshoot startup, display, USB, tracking, and games](docs/troubleshooting.md)
+- [Check compatibility and tested hardware](docs/compatibility.md)
 
-If you have (or can donate) an **HP Omnicept** — same headset, plus Tobii eye-tracking —
-that matters too: Monado already treats it as a Reverb G2 at the USB level, so a 90 Hz
-result there would show whether this is a G2 problem in general or specific to our unit.
-See [`docs/10-resources.md`](docs/10-resources.md#the-omnicept-the-same-headset-inside-with-an-extra-sensor).
+## Repository layout
 
-Everything in this repo is written in English. Measurements beat opinions: if you assert
-something, say how you measured it.
+```text
+scripts/             setup, preflight, launcher, control panel, and diagnostics
+patches/monado-wmr/  reproducible Project-VR Monado fixes and tracking mitigations
+patches/basalt-wmr/  Basalt runtime control used by the launcher
+patches/nvidia/      tested NVIDIA open-kernel-module patches for G2 90 Hz
+docs/                user and maintainer documentation
+LICENSES/            licenses for incorporated upstream patch material
+```
+
+## Safety and verification
+
+A successful modeset or reported frame rate does not prove that both panels are lit and
+stable. Verify display changes while wearing the headset. Stop immediately if a test mode
+flickers badly or causes discomfort.
+
+The NVIDIA workflow modifies kernel-module source and the boot image. Keep a fallback
+kernel or another bootable entry. The patch manager validates on temporary copies and
+creates backups, but it cannot make an untested driver release safe.
+
+## Credits
+
+The working stack builds on [Project-VR](https://github.com/AshishKumar4/Project-VR),
+[Monado](https://monado.dev/), [Basalt](https://gitlab.com/VladyslavUsenko/basalt), and
+[OpenVR Space Calibrator for Linux](https://github.com/xi-ve/openvr-space-calibrator-linux).
+See [LICENSES/README.md](LICENSES/README.md) for the license boundaries.
+
+Contributions should include the exact distribution, kernel, GPU and driver, desktop
+session, cable revision, controller setup, and physical result. See
+[CONTRIBUTING.md](CONTRIBUTING.md).

@@ -811,7 +811,7 @@ start_session() {
         printf 'SteamVR compares Monado\047s 4320x2160 window bounds with this list and will reject the DRM lease.\n' >&2
         printf 'This is a DisplayPort link/mode-validation failure, not an XWayland or login-session failure.\n' >&2
         if [ -r /proc/driver/nvidia/version ]; then
-            printf 'Run scripts/capture-nvkms-debug.sh 0 to capture the NVIDIA link decision.\n' >&2
+            printf 'Run this launcher with the diagnose command and inspect the NVIDIA status above.\n' >&2
         else
             printf 'Inspect the kernel DRM log for the GPU driving this connector.\n' >&2
         fi

@@ -121,7 +121,7 @@ install_dependencies() {
         printf 'Installing Fedora build dependencies...\n'
         sudo dnf install -y "${packages[@]}"
     else
-        die 'unsupported package manager; install the dependencies listed in docs/68-portability-and-public-release.md, then run the sources step'
+        die 'unsupported package manager; install equivalent dependencies manually, then run the sources step (see docs/compatibility.md)'
     fi
 }
 

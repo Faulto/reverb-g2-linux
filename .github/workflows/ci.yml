@@ -23,9 +23,7 @@ jobs:
       - name: Install static checker
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            shellcheck build-essential pkg-config \
-            libwayland-dev libvulkan-dev wayland-protocols
+          sudo apt-get install -y shellcheck build-essential
 
       - name: Public-release audit
         env:
@@ -45,8 +43,7 @@ jobs:
             scripts/g2-control-panel.sh \
             scripts/install-control-panel.sh \
             scripts/nvidia-g2-patch-manager.sh \
-            scripts/sync-nvidia-initramfs.sh \
-            scripts/bootstrap-lab.sh
+            scripts/sync-nvidia-initramfs.sh
 
       - name: Verify Monado patch series against pinned source
         run: |
@@ -60,17 +57,6 @@ jobs:
       - name: Compile repository C and C++ utilities
         run: |
           mkdir -p /tmp/reverb-g2-compile
-          xml=/usr/share/wayland-protocols/staging/drm-lease/drm-lease-v1.xml
-          wayland-scanner client-header "$xml" /tmp/reverb-g2-compile/drm-lease-v1-client-protocol.h
-          wayland-scanner private-code "$xml" /tmp/reverb-g2-compile/drm-lease-v1-protocol.c
-          read -r -a compile_flags <<< "$(pkg-config --cflags --libs wayland-client vulkan)"
-          for source in scripts/hmd-vk.c; do
-            gcc -O2 -Wall -Wextra -Werror \
-              -I/tmp/reverb-g2-compile \
-              "$source" /tmp/reverb-g2-compile/drm-lease-v1-protocol.c \
-              "${compile_flags[@]}" \
-              -o "/tmp/reverb-g2-compile/$(basename "${source%.c}")"
-          done
           for source in scripts/openvr-*.cpp; do
             g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only \
               -I/tmp/monado-wmr/src/external/openvr_includes "$source"

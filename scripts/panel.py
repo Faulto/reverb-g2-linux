@@ -56,7 +56,7 @@ def wait_for_companion(timeout=20):
 def open_companion():
     dev = wait_for_companion()
     if not dev:
-        sys.exit("companion 03f0:0580 not found -- check the USB port (ch. 00)")
+        sys.exit("companion 03f0:0580 not found -- check the USB connection and run g2-preflight.sh all")
     return dev
 
 

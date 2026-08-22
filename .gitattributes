@@ -1,2 +1,5 @@
-experiments/**/*.edid binary
-forum-attachments/*.bin binary
+*.sh text eol=lf
+*.py text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+*.patch text eol=lf

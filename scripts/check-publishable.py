@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Check that the repo can be published without leaking anything or hitting GitHub's
-limits. Modifies nothing. Run it before every push to a public remote.
+"""Check that the repo can be published without leaking private data or exceeding
+GitHub's blob limit. The checker modifies nothing.
 
     ./scripts/check-publishable.py
 
-The patterns to look for do NOT live in here: they are read from `scripts/.private-patterns`,
-which is in .gitignore. That way the checker does not publish the very thing it looks for —
-which is the mistake we made the first time, when the script carried the address and serial
-number it was redacting inside itself.
+Private patterns are read from the gitignored `scripts/.private-patterns` file so the
+sensitive values being checked are never embedded in this script.
 
 Format of .private-patterns: one pattern per line, lines starting with # are ignored.
 
@@ -18,11 +16,8 @@ Checks, over ALL objects in the repo and not just HEAD:
   3. that no private pattern appears in the content of any blob,
      **including binaries and compressed files**
 
-Point 3 is the one that matters. `git grep -I` skips binaries, so a .gz with private data
-inside passes a git-grep-based check without anyone looking at it. That is exactly what
-happened to us: an old nvidia-bug-report, carrying the headset's serial number and the
-network card's MAC address, survived the cleanup and reached the remote inside a
-compressed blob.
+`git grep -I` skips binaries, so the checker reads every blob directly and also inspects
+gzip and UTF-16 content.
 
 No dependencies: stdlib only.
 """
@@ -119,8 +114,8 @@ else:
 sensitive_artifacts = [
     path for path in candidate_paths
     if path.name.startswith("nvidia-system-info-")
-    or (path.parts[:2] == ("windows-kit", "captures") and path.suffix.lower() in {".jpg", ".jpeg", ".png"})
-    or (path.parts[:2] == ("windows-kit", "captures") and "console" in path.name.lower())
+    or path.name.startswith("nvidia-bug-report")
+    or path.suffix.lower() in {".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"}
 ]
 if sensitive_artifacts:
     bad("raw host reports, console transcripts, or capture images would be published:")
@@ -129,10 +124,7 @@ if sensitive_artifacts:
 else:
     ok("no raw host reports, console transcripts, or capture images would be published")
 
-# Historical experiment logs intentionally preserve the reference rig's paths.
-# Portability is enforced on the supported public interface, not on archived
-# lab notebooks whose literal commands are evidence. Private values supplied
-# through .private-patterns are still scanned across every reachable blob.
+# Maintained entry points must not contain a literal personal home directory.
 maintained_paths = {
     Path("README.md"),
     Path("CONTRIBUTING.md"),
@@ -157,7 +149,7 @@ for path in candidate_paths:
         continue
     try:
         raw = full.read_bytes()
-        if path in maintained_paths and personal_home.search(raw):
+        if (path in maintained_paths or path.suffix.lower() == ".md") and personal_home.search(raw):
             personal_paths.append(path)
         if path.suffix.lower() == ".md" and b"](file://" in raw:
             local_file_links.append(path)
@@ -342,7 +334,7 @@ else:
 say("verdict")
 if failures:
     print("   DO NOT publish until the above is resolved.")
-    print("   The cleanup procedure is in docs/17-publishing.md.")
+    print("   Resolve the findings before publishing; see CONTRIBUTING.md and SECURITY.md.")
 else:
     print("   Publishable.")
 sys.exit(failures)

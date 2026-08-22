@@ -1,26 +1,25 @@
 # Contributing
 
-This project touches a direct-display path where a successful API return does
-not prove that either G2 panel is lit. Changes are welcome, but hardware claims
-must say exactly what was tested.
+Changes are welcome, especially reports from hardware and distributions not yet listed in
+[the compatibility matrix](docs/compatibility.md).
 
 Before opening a pull request:
 
 1. Run `./scripts/check-publishable.py`.
-2. Run `./scripts/setup-index-controllers.sh verify` if changing the supported
-   Monado/Basalt/Space Calibrator path.
-3. Run `./scripts/nvidia-g2-patch-manager.sh validate` if changing the NVIDIA
-   series.
-4. Record the distribution, kernel, GPU and driver, desktop session, headset
-   revision/cable, refresh mode, controller path, and physical panel result.
-5. Do not include hardware serials, MAC addresses, account names, absolute
-   home paths, raw proprietary firmware, or generated binaries.
+2. Run `./scripts/setup-index-controllers.sh verify` after changing the Monado, Basalt, or
+   Space Calibrator setup.
+3. Run `./scripts/nvidia-g2-patch-manager.sh validate` after changing the NVIDIA series.
+4. Run ShellCheck on the maintained shell entry points listed in `.github/workflows/ci.yml`.
+5. State the distribution, kernel, GPU and driver, X11 or Wayland desktop, G2 cable revision,
+   controller path, display mode, and physical result.
 
-The working source trees are intentionally not submodules. Patches must apply
-in lexical order to the pinned commits documented beside each series. If a pin
-changes, update CI and report a complete physical retest; a successful build is
-not enough.
+A successful API call, reported refresh rate, or passing build does not prove the G2 panels
+are lit and stable. Mark hardware results as physically verified only when someone wore the
+headset and checked both panels.
 
-Historical lab scripts are retained as evidence and may be machine-specific.
-New user-facing work belongs in the maintained setup, preflight, launcher, and
-control-panel entry points listed in `docs/68-portability-and-public-release.md`.
+Do not commit account names, hardware serials, MAC addresses, absolute personal paths, raw
+firmware, host diagnostic archives, screenshots, or generated binaries.
+
+The source trees built under `G2_VR_ROOT` are not submodules. Patch files must apply in
+lexical order to the pinned commits documented beside each series. Changing a pin requires
+a complete build and physical retest.
