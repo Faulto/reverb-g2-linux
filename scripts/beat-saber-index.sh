@@ -333,8 +333,8 @@ nvidia_vram_for_connector() {
 
     while IFS=',' read -r gpu_index gpu_name gpu_bus free_mib total_mib; do
         gpu_index="${gpu_index//[[:space:]]/}"
-        gpu_name="${gpu_name#${gpu_name%%[![:space:]]*}}"
-        gpu_name="${gpu_name%${gpu_name##*[![:space:]]}}"
+        gpu_name="${gpu_name#"${gpu_name%%[![:space:]]*}"}"
+        gpu_name="${gpu_name%"${gpu_name##*[![:space:]]}"}"
         gpu_bus="${gpu_bus//[[:space:]]/}"
         free_mib="${free_mib//[[:space:]]/}"
         total_mib="${total_mib//[[:space:]]/}"
