@@ -1,0 +1,47 @@
+diff --git a/src/vit/vit_tracker.cpp b/src/vit/vit_tracker.cpp
+--- a/src/vit/vit_tracker.cpp
++++ b/src/vit/vit_tracker.cpp
+@@ -159,6 +159,28 @@ struct Tracker::Implementation {
+ 
+   OpticalFlowInput::Ptr partial_frame;
+ 
++  void apply_runtime_overrides() {
++    const char* raw_recall = std::getenv("BASALT_FEATURE_RECALL");
++    if (raw_recall == nullptr || raw_recall[0] == '\0') return;
++
++    const string mode(raw_recall);
++    if (mode == "off" || mode == "false" || mode == "0") {
++      vio_config.optical_flow_recall_enable = false;
++      vio_config.optical_flow_recall_all_cams = false;
++    } else if (mode == "front" || mode == "true" || mode == "1") {
++      vio_config.optical_flow_recall_enable = true;
++      vio_config.optical_flow_recall_all_cams = false;
++    } else if (mode == "all") {
++      vio_config.optical_flow_recall_enable = true;
++      vio_config.optical_flow_recall_all_cams = true;
++    } else {
++      std::cerr << "Ignoring invalid BASALT_FEATURE_RECALL='" << mode << "'\n";
++      return;
++    }
++    std::cout << "Basalt landmark recall: " << mode
++              << " (experimental; recalled patches persist for this tracker session)\n";
++  }
++
+   explicit Implementation(const vit::Config *config) : show_gui(config->show_ui), cam_count(config->cam_count) {
+     cout << "Basalt with cam_count=" << cam_count << ", show_gui=" << show_gui << "\n";
+ 
+@@ -179,6 +201,7 @@ struct Tracker::Implementation {
+ 
+     if (config->file == nullptr) {
+       // For the pipeline to work now, the user will need to use add_cam/imu_calibration
++      apply_runtime_overrides();
+       return;
+     }
+ 
+@@ -186,5 +209,6 @@ struct Tracker::Implementation {
+ 
+     vio_config.load(config_path);
++    apply_runtime_overrides();
+ 
+     // cam-calib is optional now. Leaving it out is what lets a unified config file carry
+     // ONLY pipeline settings while the calibration still arrives through

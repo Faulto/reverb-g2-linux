@@ -144,14 +144,29 @@ ensure_checkout() {
     fi
 }
 
-# Build the expected final source in a disposable clone. A clean source tree is
-# patched in place; an existing dirty tree is accepted only when every modified
-# tracked file is byte-for-byte identical to that expected final tree. This
-# prevents an old hand edit from silently becoming part of a public build.
+# Compare only tracked changes below HEAD. Both trees use the same pinned commit,
+# so identical path lists and contents mean they represent the same patch state.
+tracked_changes_match() {
+    local actual="$1" expected="$2" actual_paths expected_paths path
+    actual_paths="$(git -C "$actual" diff HEAD --name-only | LC_ALL=C sort)"
+    expected_paths="$(git -C "$expected" diff HEAD --name-only | LC_ALL=C sort)"
+    [ "$actual_paths" = "$expected_paths" ] || return 1
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        cmp -s "$actual/$path" "$expected/$path" || return 1
+    done <<< "$expected_paths"
+}
+
+# Build the expected final source in a disposable clone. A source tree is
+# accepted only when it is clean or byte-for-byte equal to the complete series,
+# a known prefix, or a tracked legacy series. Known older states are upgraded in
+# place; hand edits are still rejected.
 apply_verified_series() {
     local name="$1" directory="$2" patch_directory="$3"
-    local work expected actual_paths expected_paths path untracked_paths
+    local work expected prefix legacy_expected legacy_directory untracked_paths path
+    local prefix_match=-1 patch_index
     local -a patches=()
+    local -a legacy_patches=()
 
     mapfile -d '' -t patches < <(find "$patch_directory" -maxdepth 1 -type f -name '*.patch' \
         -print0 | LC_ALL=C sort -z)
@@ -168,8 +183,6 @@ apply_verified_series() {
         git -C "$expected" apply "$path"
     done
 
-    actual_paths="$(git -C "$directory" diff --name-only | LC_ALL=C sort)"
-    expected_paths="$(git -C "$expected" diff --name-only | LC_ALL=C sort)"
     untracked_paths="$(git -C "$directory" status --porcelain --untracked-files=normal | \
         sed -n 's/^?? //p')"
     if [ -n "$untracked_paths" ]; then
@@ -177,25 +190,68 @@ apply_verified_series() {
         printf 'Untracked files in %s source:\n%s\n' "$name" "$untracked_paths" >&2
         die "$name has untracked source files; move them aside before a reproducible build"
     fi
-    if [ -z "$actual_paths" ]; then
+
+    if [ -z "$(git -C "$directory" diff HEAD --name-only)" ]; then
         for path in "${patches[@]}"; do
             git -C "$directory" apply "$path"
             printf 'Applied %s patch: %s\n' "$name" "$(basename "$path")"
         done
-    elif [ "$actual_paths" = "$expected_paths" ]; then
-        while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            cmp -s "$directory/$path" "$expected/$path" || {
-                rm -rf -- "$work"
-                die "$name has an untracked hand edit in $path; refusing a non-reproducible build"
-            }
-        done <<< "$expected_paths"
+    elif tracked_changes_match "$directory" "$expected"; then
         printf '%s source already matches the complete tracked patch series.\n' "$name"
     else
-        rm -rf -- "$work"
-        printf 'Expected modified %s files:\n%s\n' "$name" "$expected_paths" >&2
-        printf 'Actually modified %s files:\n%s\n' "$name" "$actual_paths" >&2
-        die "$name source does not match either the clean pin or the complete patch series"
+        # A previous release can be an exact prefix of the current series.
+        prefix="$work/prefix"
+        git clone --quiet --no-local "$directory" "$prefix"
+        for patch_index in "${!patches[@]}"; do
+            git -C "$prefix" apply "${patches[$patch_index]}"
+            if tracked_changes_match "$directory" "$prefix"; then
+                prefix_match="$patch_index"
+                break
+            fi
+        done
+        if [ "$prefix_match" -ge 0 ]; then
+            for ((patch_index=prefix_match + 1; patch_index<${#patches[@]}; patch_index++)); do
+                path="${patches[$patch_index]}"
+                git -C "$directory" apply "$path"
+                printf 'Applied new %s patch: %s\n' "$name" "$(basename "$path")"
+            done
+        else
+            # Non-prefix migrations live below legacy/. They are never included
+            # in a fresh build. Reverse an exact legacy state, then apply today’s
+            # series from the clean pinned base.
+            legacy_directory="$patch_directory/legacy"
+            if [ -d "$legacy_directory" ]; then
+                mapfile -d '' -t legacy_patches < <(
+                    find "$legacy_directory" -maxdepth 1 -type f -name '*.patch' \
+                        -print0 | LC_ALL=C sort -z
+                )
+            fi
+            if [ "${#legacy_patches[@]}" -gt 0 ]; then
+                legacy_expected="$work/legacy"
+                git clone --quiet --no-local "$directory" "$legacy_expected"
+                for path in "${legacy_patches[@]}"; do
+                    git -C "$legacy_expected" apply "$path"
+                done
+            fi
+            if [ "${#legacy_patches[@]}" -gt 0 ] && \
+               tracked_changes_match "$directory" "$legacy_expected"; then
+                for ((patch_index=${#legacy_patches[@]} - 1; patch_index>=0; patch_index--)); do
+                    git -C "$directory" apply --reverse "${legacy_patches[$patch_index]}"
+                done
+                for path in "${patches[@]}"; do
+                    git -C "$directory" apply "$path"
+                    printf 'Applied current %s patch: %s\n' "$name" "$(basename "$path")"
+                done
+                printf 'Migrated %s from the previous tracked patch series.\n' "$name"
+            else
+                printf 'Expected modified %s files:\n%s\n' "$name" \
+                    "$(git -C "$expected" diff HEAD --name-only | LC_ALL=C sort)" >&2
+                printf 'Actually modified %s files:\n%s\n' "$name" \
+                    "$(git -C "$directory" diff HEAD --name-only | LC_ALL=C sort)" >&2
+                rm -rf -- "$work"
+                die "$name source does not match a clean pin or a tracked patch-series state"
+            fi
+        fi
     fi
     rm -rf -- "$work"
 }

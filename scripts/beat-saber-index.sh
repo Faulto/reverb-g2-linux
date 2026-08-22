@@ -321,6 +321,58 @@ g2_connector() {
     return 1
 }
 
+nvidia_vram_for_connector() {
+    local connector="$1" card pci_address pci_suffix
+    local gpu_index gpu_name gpu_bus free_mib total_mib
+    command -v nvidia-smi >/dev/null 2>&1 || return 1
+    card="$(basename "$connector")"
+    card="${card%%-*}"
+    pci_address="$(basename "$(readlink -f "/sys/class/drm/$card/device" 2>/dev/null)" 2>/dev/null)"
+    [[ "$pci_address" =~ ^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}[.][0-9]$ ]] || return 1
+    pci_suffix="${pci_address#*:}"
+
+    while IFS=',' read -r gpu_index gpu_name gpu_bus free_mib total_mib; do
+        gpu_index="${gpu_index//[[:space:]]/}"
+        gpu_name="${gpu_name#${gpu_name%%[![:space:]]*}}"
+        gpu_name="${gpu_name%${gpu_name##*[![:space:]]}}"
+        gpu_bus="${gpu_bus//[[:space:]]/}"
+        free_mib="${free_mib//[[:space:]]/}"
+        total_mib="${total_mib//[[:space:]]/}"
+        if [[ "$gpu_bus" = *":$pci_suffix" ]] && \
+           [[ "$free_mib" =~ ^[0-9]+$ ]] && [[ "$total_mib" =~ ^[0-9]+$ ]]; then
+            printf '%s|%s|%s|%s\n' "$free_mib" "$total_mib" "$gpu_name" "$gpu_index"
+            return 0
+        fi
+    done < <(nvidia-smi \
+        --query-gpu=index,name,pci.bus_id,memory.free,memory.total \
+        --format=csv,noheader,nounits 2>/dev/null)
+    return 1
+}
+
+check_vram_headroom() {
+    local connector="$1" info free_mib total_mib gpu_name gpu_index
+    local minimum_mib="${G2_MIN_FREE_VRAM_MIB:-2048}"
+    local recommended_mib="${G2_RECOMMENDED_FREE_VRAM_MIB:-4096}"
+    [[ "$minimum_mib" =~ ^[0-9]+$ ]] || die 'G2_MIN_FREE_VRAM_MIB must be an integer.'
+    [[ "$recommended_mib" =~ ^[0-9]+$ ]] || die 'G2_RECOMMENDED_FREE_VRAM_MIB must be an integer.'
+    info="$(nvidia_vram_for_connector "$connector" 2>/dev/null || true)"
+    [ -n "$info" ] || return 0
+    IFS='|' read -r free_mib total_mib gpu_name gpu_index <<< "$info"
+    printf 'G2 GPU: %s (NVIDIA index %s), %s/%s MiB VRAM free.\n' \
+        "$gpu_name" "$gpu_index" "$free_mib" "$total_mib"
+    if [ "$free_mib" -lt "$minimum_mib" ]; then
+        printf '\nSteamVR does not have enough free GPU memory to create the G2 compositor textures.\n' >&2
+        printf 'Free at least %s MiB on %s; %s MiB is available now.\n' \
+            "$minimum_mib" "$gpu_name" "$free_mib" >&2
+        printf 'Close local AI models, render jobs, games, or other GPU-heavy programs, then retry.\n' >&2
+        return 1
+    fi
+    if [ "$free_mib" -lt "$recommended_mib" ]; then
+        printf 'WARNING: only %s MiB VRAM is free. SteamVR may start, but Beat Saber has little headroom.\n' \
+            "$free_mib" >&2
+    fi
+}
+
 watchman_radio_count() {
     local uevent node count=0
     for uevent in /sys/class/hidraw/hidraw*/device/uevent; do
@@ -577,7 +629,10 @@ show_status() {
     show_settings
     pgrep -a -x vrserver 2>/dev/null || printf 'vrserver: stopped\n'
     pgrep -a -x vrcompositor 2>/dev/null || printf 'vrcompositor: stopped\n'
-    if [ -f "$COMPOSITOR_LOG" ] && tail -n 300 "$COMPOSITOR_LOG" | rg -q 'Direct mode: enabled'; then
+    if [ -f "$COMPOSITOR_LOG" ] && tail -n 300 "$COMPOSITOR_LOG" | \
+        rg -q 'Unable to allocate memory|CreateMSAARenderTextures|Failed to create render textures'; then
+        printf 'Last compositor result: GPU-memory allocation failed\n'
+    elif [ -f "$COMPOSITOR_LOG" ] && tail -n 300 "$COMPOSITOR_LOG" | rg -q 'Direct mode: enabled'; then
         printf 'Last compositor result: direct mode enabled\n'
     fi
 }
@@ -749,7 +804,8 @@ launch_steamvr_processes() {
 start_session() {
     local audio_playback_node="" audio_recording_node="" connector="" compositor_pid=""
     local compositor_start="" server_pid="" server_start="" success=0 radios
-    local smooth_position=false smooth_orientation=false monado_failed=0 attempt
+    local smooth_position=false smooth_orientation=false monado_failed=0 compositor_vram_failed=0 attempt
+    local direct_mode_checks=0
     local position_cutoff=8.0 position_beta=2.0 prediction_type=4
 
     require_file "$MONADO_DRIVER/bin/linux64/driver_monado.so"
@@ -848,6 +904,10 @@ start_session() {
         exit 1
     fi
     printf 'G2 ready on %s with 4320x2160 exposed.\n' "$connector"
+    if ! check_vram_headroom "$connector"; then
+        python3 "$REPO/scripts/panel.py" off >/dev/null 2>&1 || true
+        die 'VR startup stopped before the positioning countdown because GPU memory is too low.'
+    fi
     if ! confirm_position_countdown; then
         python3 "$REPO/scripts/panel.py" off >/dev/null 2>&1 || true
         printf 'VR startup cancelled before tracking initialized; the G2 panel was turned off.\n'
@@ -858,6 +918,8 @@ start_session() {
     for attempt in 1 2; do
         success=0
         monado_failed=0
+        compositor_vram_failed=0
+        direct_mode_checks=0
         compositor_pid=""
         compositor_start=""
         server_pid=""
@@ -891,10 +953,25 @@ start_session() {
                         tail -1 | cut -d: -f1
                 )"
             fi
-            if [ -n "$compositor_start" ] && \
-               tail -n +"$compositor_start" "$COMPOSITOR_LOG" | rg -q 'Direct mode: enabled'; then
-                success=1
-                break
+            if [ -n "$compositor_start" ]; then
+                if tail -n +"$compositor_start" "$COMPOSITOR_LOG" | \
+                   rg -q 'Unable to allocate memory|CreateMSAARenderTextures|Failed to create render textures'; then
+                    compositor_vram_failed=1
+                    break
+                fi
+                if tail -n +"$compositor_start" "$COMPOSITOR_LOG" | rg -q 'Direct mode: enabled' && \
+                   kill -0 "$compositor_pid" 2>/dev/null; then
+                    direct_mode_checks=$((direct_mode_checks + 1))
+                    # Direct mode precedes allocation of SteamVR's large system-layer
+                    # textures. Require one second of healthy compositor life so a
+                    # low-VRAM exit is not mistaken for a successful launch.
+                    if [ "$direct_mode_checks" -ge 4 ]; then
+                        success=1
+                        break
+                    fi
+                else
+                    direct_mode_checks=0
+                fi
             fi
             sleep 0.25
         done
@@ -917,6 +994,14 @@ start_session() {
             fi
             printf 'This happened before vrcompositor requested a DRM lease. USB can enumerate correctly while the WMR device open/initialization still fails.\n' >&2
             printf 'Detailed Monado/WMR output: %s\n' "$STARTUP_LOG" >&2
+        elif [ "$compositor_vram_failed" = 1 ]; then
+            printf '\nSteamVR acquired the G2 display but ran out of GPU memory while creating compositor textures.\n' >&2
+            if [ -n "$compositor_start" ]; then
+                tail -n +"$compositor_start" "$COMPOSITOR_LOG" | \
+                    rg 'Unable to allocate memory|CreateMSAARenderTextures|Failed to create render textures|Failed to init graphics device' | \
+                    tail -12 >&2 || true
+            fi
+            printf 'Close GPU-heavy programs or local AI models, then start VR again.\n' >&2
         elif [ -z "$compositor_start" ]; then
             printf '\nSteamVR never started a compositor for this launch.\n' >&2
             printf 'Inspect %s and the current vrserver log; this is not yet a DRM-lease failure.\n' "$STARTUP_LOG" >&2

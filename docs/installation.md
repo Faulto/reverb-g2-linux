@@ -38,8 +38,15 @@ They are stored under `~/vr` by default. To put them elsewhere:
 G2_VR_ROOT=/path/to/vr ./scripts/setup-index-controllers.sh all
 ```
 
-The script will not overwrite a source tree with unknown edits. It accepts either the clean
-tested version or this repo's complete patch set.
+The script will not overwrite a source tree with unknown edits. It accepts the clean tested
+version, this repo's complete patch set, and exact patch states installed by older releases.
+Known older states are upgraded in place; unknown hand edits are still refused.
+
+After pulling a repo update that changes Monado or Basalt patches, run the same command again:
+
+```bash
+./scripts/setup-index-controllers.sh all
+```
 
 ## 2. Give your user access to the G2
 

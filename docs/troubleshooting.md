@@ -71,10 +71,24 @@ If the displays still reset, power-cycle the cable box and rerun the full USB ch
 the panels are stable, use the stillness height correction or **Set floor again** if the
 reset moved your play space.
 
-## SteamVR cannot acquire the display
+## SteamVR fails with error 472
 
-Close GPU-heavy programs and try again. Low free VRAM has allowed the SteamVR compositor to
-start without successfully taking the G2 display.
+Error 472 is generic, so the useful answer is in `vrcompositor.txt`. One confirmed cause is
+low VRAM: SteamVR can acquire the G2, enable direct mode, and then fail while creating its
+large compositor textures. The log contains messages such as `Unable to allocate memory`,
+`Failed to create render textures`, or `VRInitError_Compositor_CreateMSAARenderTextures`.
+
+The launcher now checks free memory on the GPU that owns the G2 connector and stops before
+the positioning countdown if less than 2 GiB is available. It warns below 4 GiB because the
+compositor may start but leave too little room for Beat Saber. Close local AI models, render
+jobs, games, or other GPU-heavy programs, choose **Stop VR** to clean up the failed session,
+and start again. NVIDIA users can see current usage with:
+
+```bash
+nvidia-smi
+```
+
+## SteamVR cannot acquire the display
 
 On Wayland, `diagnose` shows the relevant compositor error. An unclean SteamVR exit can also
 leave the display lease stuck. Stop VR cleanly first. If that does not help, log out and

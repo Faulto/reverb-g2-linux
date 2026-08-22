@@ -34,6 +34,7 @@ the older [Wintch/reverb-g2](https://github.com/Wintch/reverb-g2) research repo.
 - Finds Steam, SteamVR, Beat Saber, audio devices, and the G2 display automatically.
 - Checks the full G2 USB connection instead of trusting a single `lsusb` entry.
 - Checks that both Index-controller receivers are present and usable.
+- Checks free VRAM on the GPU that owns the headset before starting tracking.
 - Patches supported NVIDIA open drivers for 90 Hz, rebuilds DKMS, and updates the boot
   image.
 - Starts SteamVR only after the hardware and display checks pass.
@@ -265,6 +266,7 @@ another boot entry available.
 ## Credits
 
 This work builds on [Project-VR](https://github.com/AshishKumar4/Project-VR),
-[Monado](https://monado.dev/), [Basalt](https://gitlab.com/VladyslavUsenko/basalt), and
+[Wintch/reverb-g2](https://github.com/Wintch/reverb-g2), [Monado](https://monado.dev/),
+[Basalt](https://gitlab.com/VladyslavUsenko/basalt), and
 [OpenVR Space Calibrator for Linux](https://github.com/xi-ve/openvr-space-calibrator-linux).
 License details are in [LICENSES/README.md](LICENSES/README.md).

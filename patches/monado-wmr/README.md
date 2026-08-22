@@ -17,6 +17,7 @@ the physically verified G2 + SteamVR session:
 | 0007 | Reject non-finite, discontinuous, over-speed, and runaway SLAM poses; reset after sustained corruption |
 | 0008 | Forward optional head angular velocity so SteamVR can predict rotation to photon time |
 | 0009 | Bound the session tracking volume, hold the last safe pose, and recover moderate upright height drift without moving controllers independently |
+| 0010 | Keep IMU/camera tracking alive when the v1 cable’s separate companion-control interface drops; use non-blocking retry backoff adapted from Wintch/reverb-g2’s measured fix |
 
 The setup script first constructs the expected final tree in a disposable
 clone. An existing source tree is accepted only if its tracked modifications

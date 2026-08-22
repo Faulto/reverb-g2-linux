@@ -1,0 +1,70 @@
+diff --git a/src/xrt/drivers/wmr/wmr_hmd.c b/src/xrt/drivers/wmr/wmr_hmd.c
+--- a/src/xrt/drivers/wmr/wmr_hmd.c
++++ b/src/xrt/drivers/wmr/wmr_hmd.c
+@@ -600,18 +600,41 @@ control_read_packets(struct wmr_hmd *wh)
+ {
+ 	DRV_TRACE_MARKER();
+ 
++	// The companion and HoloLens sensors share this read thread, but only the
++	// latter carries tracking IMU/camera data. Back off by skipping companion
++	// polls instead of sleeping here: an in-loop sleep also throttles the sensor
++	// read and was measured upstream to make its timestamps roughly 630 ms stale.
++	if (wh->companion_backoff_until_ns != 0 && os_monotonic_get_ns() < wh->companion_backoff_until_ns) {
++		return true;
++	}
++
+ 	unsigned char buffer[WMR_FEATURE_BUFFER_SIZE];
+ 
+ 	// Do not block
+ 	os_mutex_lock(&wh->hid_lock);
+ 	int size = os_hid_read(wh->hid_control_dev, buffer, sizeof(buffer), 0);
+ 	os_mutex_unlock(&wh->hid_lock);
+ 
+ 	if (size < 0) {
+-		WMR_ERROR(wh, "Error reading from companion (HMD control) device. Call to os_hid_read returned %i",
+-		          size);
+-		return false;
++		// A v1-cable USB2 dropout must not kill the shared thread and take
++		// tracking down with an unrelated IPD/proximity/control interface.
++		wh->companion_consecutive_read_errors++;
++		if (wh->companion_consecutive_read_errors == 1 ||
++		    wh->companion_consecutive_read_errors % 1000 == 0) {
++			WMR_WARN(wh,
++			         "Error reading from companion (HMD control) device (%d in a row); "
++			         "tracking remains active (os_hid_read=%i)",
++			         wh->companion_consecutive_read_errors, size);
++		} else {
++			WMR_DEBUG(wh, "Companion control read failed: %i", size);
++		}
++		if (wh->companion_consecutive_read_errors > 50) {
++			wh->companion_backoff_until_ns = os_monotonic_get_ns() + U_TIME_1MS_IN_NS * 10;
++		}
++		return true;
+ 	}
++	wh->companion_consecutive_read_errors = 0;
++	wh->companion_backoff_until_ns = 0;
+ 	if (size == 0) {
+ 		WMR_TRACE(wh, "No more data to read");
+ 		return true; // No more messages, return.
+diff --git a/src/xrt/drivers/wmr/wmr_hmd.h b/src/xrt/drivers/wmr/wmr_hmd.h
+--- a/src/xrt/drivers/wmr/wmr_hmd.h
++++ b/src/xrt/drivers/wmr/wmr_hmd.h
+@@ -100,6 +100,18 @@ struct wmr_hmd
+ 	 */
+ 	struct os_hid_device *hid_control_dev;
+ 
++	/*
++	 * A companion dropout must not stop the shared HoloLens sensor read loop.
++	 * Count failures for rate-limited reporting and retry the non-essential
++	 * companion interface at no more than roughly 100 Hz during a sustained
++	 * outage. The deadline skips only this read; it never sleeps or delays IMU.
++	 *
++	 * Adapted from Wintch/reverb-g2 patches 0049 and 0055 after their hardware
++	 * tests found that blocking backoff caused about 630 ms of IMU staleness.
++	 */
++	int companion_consecutive_read_errors;
++	uint64_t companion_backoff_until_ns;
++
+ 	//! Current desired HMD screen state.
+ 	bool hmd_screen_enable;
+ 	//! Latest raw IPD value read from the device.

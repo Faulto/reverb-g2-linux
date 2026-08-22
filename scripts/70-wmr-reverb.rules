@@ -6,11 +6,11 @@
 
 # HP QHMD display/companion board.
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0580", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="usb", ATTR{idVendor}=="03f0", ATTR{idProduct}=="0580", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="03f0", ATTR{idProduct}=="0580", MODE="0660", TAG+="uaccess", TEST=="power/control", ATTR{power/control}="on"
 
 # Microsoft HoloLens sensors: IMU and four tracking cameras.
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="045e", ATTRS{idProduct}=="0659", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="0659", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="0659", MODE="0660", TAG+="uaccess", TEST=="power/control", ATTR{power/control}="on"
 
 # HP Reverb G2 motion controllers connected through host Bluetooth. With
 # BlueZ's default UserspaceHID mode these are virtual UHID devices, so they do
@@ -22,5 +22,9 @@ KERNEL=="hidraw*", SUBSYSTEM=="hidraw", KERNELS=="0005:045E:066A.*", MODE="0660"
 # these IDs; the functional endpoint rules above still apply.
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="6504", MODE="0660", TAG+="uaccess"
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="6506", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6504", MODE="0660", TAG+="uaccess"
-SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6506", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6504", MODE="0660", TAG+="uaccess", TEST=="power/control", ATTR{power/control}="on"
+SUBSYSTEM=="usb", ATTR{idVendor}=="04b4", ATTR{idProduct}=="6506", MODE="0660", TAG+="uaccess", TEST=="power/control", ATTR{power/control}="on"
+
+# Keep the G2 audio function awake as well. This is deliberately scoped to the
+# headset's exact Realtek product, not every device made by Realtek.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0bda", ATTR{idProduct}=="4c15", TEST=="power/control", ATTR{power/control}="on"
