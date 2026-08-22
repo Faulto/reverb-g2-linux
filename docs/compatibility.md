@@ -1,71 +1,89 @@
 # Compatibility
 
-The scripts are written to discover system paths and hardware dynamically, but portable
-detection is not the same as verified hardware support.
+The launcher finds most paths, USB devices, displays, and audio nodes automatically. That
+helps it work on different PCs, but it does not mean every combination has been tested yet.
 
-## Physically tested
+## Fully tested setup
 
-| Component | Verified configuration |
+| Part | What was tested |
 |---|---|
 | Headset | HP Reverb G2, including a v1 cable |
-| Display | Native 4320×2160 at 90 Hz |
-| Linux | Arch Linux with Plasma Wayland; Debian 13 used during display-driver testing |
+| Display | Full 4320×2160 combined mode at 90 Hz |
+| Linux | Arch Linux with Plasma Wayland; Debian 13 for NVIDIA display-driver testing |
 | GPU | NVIDIA RTX 5080 and RTX 3060 Ti |
-| NVIDIA driver | Open kernel modules, 610.57.04 and 595.71.05 |
+| NVIDIA driver | Open kernel modules 610.57.04 and 595.71.05 |
 | Head tracking | Project-VR Monado with Basalt visual-inertial tracking |
-| Controllers | Valve Index controllers through two Watchman receivers |
-| Positional alignment | OpenVR Space Calibrator for Linux |
-| Game | Native SteamVR with Beat Saber, including a BSManager-managed modded instance |
+| Controllers | Index controllers with two Watchman receivers |
+| Space alignment | OpenVR Space Calibrator for Linux |
+| Game | Native SteamVR and Beat Saber, including a modded BSManager instance |
 
-## Implemented but needing more machines
+## Built in, but still needs more testers
 
-The dependency installer has package lists for Arch, Debian/Ubuntu, and Fedora. The launcher
-supports native Steam libraries outside the default path, XDG path overrides, different DRM
-card and DisplayPort numbers, user-selected source roots, PipeWire audio node changes, and
-BSManager content on another filesystem.
+The dependency installer supports Arch, Debian/Ubuntu, and Fedora package managers. The
+launcher also handles:
 
-Fresh reports are still needed for:
+- native Steam libraries outside the usual folder;
+- XDG path overrides;
+- changing DRM card and DisplayPort numbers;
+- source trees outside `~/vr`;
+- changing PipeWire audio node numbers; and
+- BSManager content stored on another filesystem.
+
+We still need fresh, physical tests on:
 
 - current Ubuntu and Fedora releases;
-- GNOME Wayland and additional X11 desktops;
+- GNOME Wayland and more X11 desktops;
 - AMD and Intel GPUs;
 - the G2 rev2 cable; and
-- NVIDIA releases newer than the tested 595/610 families.
+- NVIDIA drivers newer than the tested 595 and 610 families.
 
-## Not currently supported
+If you try one of these, a successful build is useful but not enough. Please confirm that
+both G2 panels light properly, run at 90 Hz, and remain stable during real head movement.
 
-- Native Reverb G2 motion-controller tracking. The previous experiments did not form one
-  clean, reproducible source series with reliable enough tracking for this tool.
-- Flatpak Steam. The supported profile uses native Steam/SteamVR paths, runtime files, and
+## Not supported right now
+
+- **Native G2 motion controllers.** The earlier experiments did not produce one clean,
+  repeatable patch series with tracking reliable enough for this launcher.
+- **Flatpak Steam.** This setup expects native Steam and SteamVR paths, runtime files, and
   driver registration.
-- NVIDIA's proprietary kernel module. The included patches target the published open-module
-  source tree.
-- Automatic patching of an unknown NVIDIA release.
-- Continuous Lighthouse/G2 calibration without a tracker physically attached to the HMD.
+- **NVIDIA's proprietary kernel module.** The display patches target NVIDIA's published
+  open-module source.
+- **Automatic patching of an unknown NVIDIA family.** The tool refuses to guess.
+- **Permanent G2/Lighthouse alignment without recalibration.** Without a Lighthouse tracker
+  fixed to the HMD, very active play can still need a Fast Space Calibrator resync.
 
-## Useful overrides
+## Overrides for unusual installs
 
-Most systems should not need overrides. Unusual layouts can set:
+Most people should not need these. Run `./scripts/beat-saber-index.sh paths` first to see
+what the launcher found on its own.
 
-| Variable | Purpose |
+| Variable | Use it to change |
 |---|---|
-| `G2_VR_ROOT` | Parent directory for Monado, Basalt, and Space Calibrator source trees |
+| `G2_VR_ROOT` | Parent folder for Monado, Basalt, and Space Calibrator source |
 | `STEAM_ROOT` | Native Steam root |
-| `STEAMVR_DIR` | SteamVR installation directory |
-| `BEAT_SABER_DIR` | Normal Steam Beat Saber directory |
-| `MONADO_DIR` | Project-VR Monado source/build directory |
-| `BASALT_DIR` | Basalt source/build directory |
+| `STEAMVR_DIR` | SteamVR installation folder |
+| `BEAT_SABER_DIR` | Normal Steam Beat Saber folder |
+| `MONADO_DIR` | Project-VR Monado source and build folder |
+| `BASALT_DIR` | Basalt source and build folder |
 | `SPACECAL_DRIVER_DIR` | Installed Space Calibrator SteamVR driver |
-| `G2_DRM_CONNECTOR` | Explicit G2 DRM connector for diagnosis only |
+| `G2_DRM_CONNECTOR` | Exact G2 DRM connector, for diagnosis only |
 | `BSMANAGER` | BSManager executable |
-| `NVIDIA_SOURCE_DIR` | Exact NVIDIA open-module source tree |
+| `NVIDIA_SOURCE_DIR` | Exact NVIDIA open-module source folder |
 
-Run `./scripts/beat-saber-index.sh paths` to see what the launcher discovered before adding
-an override.
+## Sending a compatibility report
 
-## Reporting a new configuration
+Please include:
 
-Include the distribution and release, kernel, desktop and X11/Wayland session, GPU, driver
-and open/proprietary module type, headset and cable revision, USB controller/topology,
-controller hardware, exposed display mode, and the physical result seen in both panels.
-Build success or a reported frame rate alone is not a display verification.
+- distribution and release;
+- kernel version;
+- desktop and whether it uses X11 or Wayland;
+- GPU and driver version;
+- NVIDIA open or proprietary module type, when relevant;
+- G2 cable revision;
+- USB controller and topology;
+- controller hardware;
+- the display mode reported by Linux; and
+- what you actually saw in both panels.
+
+Frame rate, build success, or a reported 90 Hz mode alone does not confirm that the display
+works correctly.

@@ -47,17 +47,17 @@ edit_settings() {
     local height smoothing prediction angular strength recall autoexposure unify_exposure
     local height_recovery recovery_delay volume start_delay
     local smoothing_label prediction_label recall_label result output
-    height="$(setting G2_EYE_HEIGHT 1.76)"
+    height="$(setting G2_EYE_HEIGHT 1.77)"
     smoothing="$(setting G2_SMOOTHING off)"
     prediction="$(setting G2_PREDICTION_MODE dead-reckoning)"
     angular="$(setting G2_ANGULAR_PREDICTION true)"
     strength="$(setting G2_ANGULAR_PREDICTION_STRENGTH 100)"
-    recall="$(setting G2_FEATURE_RECALL off)"
+    recall="$(setting G2_FEATURE_RECALL front)"
     autoexposure="$(setting G2_CAMERA_AUTOEXPOSURE true)"
     unify_exposure="$(setting G2_CAMERA_UNIFY_EXPOSURE false)"
     height_recovery="$(setting G2_HEIGHT_RECOVERY true)"
     recovery_delay="$(setting G2_HEIGHT_RECOVERY_DELAY 8)"
-    volume="$(setting G2_AUDIO_VOLUME 100)"
+    volume="$(setting G2_AUDIO_VOLUME 65)"
     start_delay="$(setting G2_START_DELAY 10)"
     case "$smoothing" in
         position-light) smoothing_label='Light position — less jitter, very little lag' ;;
@@ -73,19 +73,19 @@ edit_settings() {
         *) prediction_label='Dead reckoning — recommended G2 setting' ;;
     esac
     case "$recall" in
-        front) recall_label='Front camera — experimental, moderate cost' ;;
+        front) recall_label='Front camera — tested default, moderate cost' ;;
         all) recall_label='All cameras — experimental, high CPU/memory' ;;
-        *) recall_label='Off — safe default' ;;
+        *) recall_label='Off — lower resource use' ;;
     esac
 
     result="$(yad --title='Reverb G2 tracking and session settings' --width=840 --height=790 --form \
-        --text='All tracking changes take effect on the next SteamVR start and are reversible here.\n\nChange one control at a time. Dead reckoning is the better tested prediction mode. Full smoothing and feature recall are experimental.' \
+        --text='All tracking changes take effect on the next SteamVR start and are reversible here.\n\nChange one control at a time. Dead reckoning and front-camera landmark recall are the tested defaults. Full smoothing and all-camera recall are experimental.' \
         --field='Standing eye height in metres:NUM' "$height!1.00..2.50!0.01!2" \
         --field='Smoothing — position presets do not delay rotation:CB' "$smoothing_label!Off — sharpest and lowest latency!Light position — less jitter, very little lag!Standard position — smoother translation!Full experimental — also filters rotation" \
         --field='SLAM prediction — how Monado advances the last Basalt pose:CB' "$prediction_label!Dead reckoning — recommended G2 setting!Gyro only — less translation prediction; drifted in G2 test!Accel + gyro — intermediate IMU prediction!Pose only — uses recent visual poses!None — diagnostic, highest latency" \
         --field='Let SteamVR predict rotation to photon time:CHK' "$angular" \
         --field='SteamVR angular prediction strength (100 = current):NUM' "$strength!0..150!5!0" \
-        --field='Basalt landmark recall — may reduce drift/relocalisation:CB' "$recall_label!Off — safe default!Front camera — experimental, moderate cost!All cameras — experimental, high CPU/memory" \
+        --field='Basalt landmark recall — may reduce drift/relocalisation:CB' "$recall_label!Front camera — tested default, moderate cost!Off — lower resource use!All cameras — experimental, high CPU/memory" \
         --field='Camera auto-exposure — keep on unless testing lighting:CHK' "$autoexposure" \
         --field='Use one exposure for all four cameras — experimental:CHK' "$unify_exposure" \
         --field='Recover false height drift while upright — avoids mild-drift grey screens:CHK' "$height_recovery" \

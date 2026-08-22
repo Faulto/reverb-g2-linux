@@ -136,17 +136,19 @@ APP_ID=620980
 
 mkdir -p "$CACHE_DIR"
 
-G2_EYE_HEIGHT=1.76
+# Defaults from the physically tested Beat Saber profile. A saved session.conf
+# still takes priority, so upgrades do not overwrite the user's settings.
+G2_EYE_HEIGHT=1.77
 G2_SMOOTHING=off
 G2_PREDICTION_MODE=dead-reckoning
 G2_ANGULAR_PREDICTION=true
 G2_ANGULAR_PREDICTION_STRENGTH=100
-G2_FEATURE_RECALL=off
+G2_FEATURE_RECALL=front
 G2_CAMERA_AUTOEXPOSURE=true
 G2_CAMERA_UNIFY_EXPOSURE=false
 G2_HEIGHT_RECOVERY=true
 G2_HEIGHT_RECOVERY_DELAY=8
-G2_AUDIO_VOLUME=100
+G2_AUDIO_VOLUME=65
 G2_START_DELAY=10
 
 load_settings() {

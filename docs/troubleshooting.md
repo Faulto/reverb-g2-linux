@@ -1,39 +1,38 @@
 # Troubleshooting
 
-Start with the integrated report:
+Start with these two commands:
 
 ```bash
 ./scripts/beat-saber-index.sh diagnose
 ./scripts/g2-preflight.sh all
 ```
 
-Do not bypass a failed required preflight. It is designed to stop before a bad USB or
-display state becomes a misleading SteamVR failure.
+Fix any failed preflight before trying to start SteamVR again. The launcher stops early so
+a bad USB or display connection does not turn into a confusing SteamVR error.
 
-## USB 3 reports 480 Mb/s
+## The USB 3 connection says 480 Mb/s
 
-The G2 cable has separate USB 2 and SuperSpeed paths. The cable can enumerate while its
-SuperSpeed half or tracking cameras are stuck at USB 2 speed.
+The G2 cable has separate USB 2 and USB 3 branches. Half of the cable can be working while
+the tracking cameras or SuperSpeed branch is stuck at USB 2 speed.
 
-The required results are:
+The hardware check should show:
 
 - Cypress SuperSpeed half: at least 5000 Mb/s;
 - Cypress USB 2 companion half: 480 Mb/s;
 - HoloLens tracking cameras and sensors: at least 5000 Mb/s; and
 - the HP control and G2 audio interfaces present.
 
-Try a different USB 3 port or powered hub. With the v1 cable, power-cycle the cable box and
-rerun the preflight. Replugging only one connector may leave the other half in the same bad
-state.
+Try another USB 3 port or a powered hub. If you have the v1 cable, unplug power from the
+cable box for a few seconds and try again. Reconnecting only one plug can leave the other
+half in the same bad state.
 
-## The G2 connector never appears
+## The G2 display connector never appears
 
-Confirm the HP control interface is accessible and let the launcher activate the panel.
-Do not hard-code `card0-DP-1` or another connector: the tool identifies the G2 from its EDID
-across every DRM card and DisplayPort connector.
+Let the launcher wake the panel. Do not hard-code a name such as `card0-DP-1`; the tool
+finds the G2 by its EDID even when Linux changes the card or DisplayPort number.
 
-If USB passes but no connector appears, check DisplayPort seating, cable-box power, kernel
-messages, and whether another process still owns the headset.
+If every USB check passes but the connector is still missing, check the DisplayPort plug,
+cable-box power, kernel messages, and whether an old VR process still owns the headset.
 
 ## 60 Hz works but 90 Hz is black or flickers
 
@@ -43,62 +42,108 @@ On NVIDIA, run:
 ./scripts/beat-saber-index.sh nvidia status
 ```
 
-Confirm the running driver is the rebuilt open module and that every patch required for its
-family is applied. If the installed and running versions differ, finish the patch/rebuild
-workflow and reboot. The supported target is the native 4320×2160 mode at 90 Hz; reduced
-modes were useful during diagnosis but are not the intended configuration.
+The running driver must be the rebuilt NVIDIA open module, with every patch required for
+its family. If the installed and running versions differ, finish the patch and rebuild,
+then reboot.
 
-A reported 90 Hz modeset is not enough. Put on the headset and verify that both panels are
-lit, stable, and free of severe flicker.
+This setup targets the G2's full 4320×2160 combined mode at 90 Hz. A successful modeset does
+not prove the screens are healthy. Put on the headset and make sure both panels are lit and
+stable. Stop immediately if they flicker badly or make you feel unwell.
 
 ## SteamVR cannot acquire the display
 
-Close GPU-heavy applications and retry. Low available VRAM has caused the SteamVR
-compositor to start without acquiring the G2 lease.
+Close GPU-heavy programs and try again. Low free VRAM has allowed the SteamVR compositor to
+start without successfully taking the G2 display.
 
-On Wayland, inspect the compositor error shown by `diagnose`. An unclean SteamVR exit can
-leave the desktop compositor unable to grant the HMD lease until VR is stopped cleanly or
-the desktop session is restarted.
+On Wayland, `diagnose` shows the relevant compositor error. An unclean SteamVR exit can also
+leave the display lease stuck. Stop VR cleanly first. If that does not help, log out and
+back in or restart the desktop session.
 
-## A controller floats away or loses tracking
+## One controller floats away or loses tracking
 
-This is usually Lighthouse radio placement rather than G2 tracking:
+This is usually a Lighthouse radio problem. Check the simple things before pairing again:
 
-- use one Watchman receiver per controller;
-- move the dongles away from the computer and other high-speed USB devices;
-- separate the receivers from each other with extension leads;
-- confirm both base stations are visible; and
-- power-cycle or re-pair only after checking placement.
+- use one Watchman receiver for each controller;
+- put both receivers on extension leads;
+- keep them away from the computer and other fast USB devices;
+- separate them from each other; and
+- make sure both base stations can see the controllers.
 
-The preflight reports detected and accessible radios independently.
+The hardware check reports each receiver separately. Poor dongle placement can make one
+controller look fine while the other repeatedly flies away.
 
-## Both controllers track but are offset
+## Both controllers are in the wrong place
 
-Repeat Space Calibrator. Keep the selected controller pressed rigidly against the headset
-during the full figure-eight motion. If either device shifts relative to the other, the
-saved transform is wrong.
+If they have been wrong since startup, repeat a normal Space Calibrator calibration. Hold
+the chosen controller firmly against the headset and move them together through the full
+figure-eight motion. Any movement between them gives Space Calibrator a bad transform.
 
-Run the ready check afterward:
+Then run:
 
 ```bash
-./scripts/beat-saber-index.sh ready 1.76
+./scripts/beat-saber-index.sh ready 1.77
 ```
 
-## The floor or player height is wrong
+Replace `1.77` with your real standing eye height.
 
-Keep the headset off the floor during startup. Stand at play-centre during the positioning
-countdown, then run:
+## The controllers become slightly offset after a song
+
+Heavy movement can produce a small offset between the G2 headset and Index controllers. We
+noticed this most after FitBeat maps with squats, jumps, and quick side-to-side movement.
+It was usually good for one song, then needed a quick resync.
+
+Pause between songs and open **Space Calibrator** from the SteamVR menu. Keep the same G2
+reference and Index target, select **Fast**, press the controller firmly against the
+headset, and run calibration. There is no need to restart Beat Saber or SteamVR.
+
+This appears to be relative drift between the two tracking spaces, but the exact cause has
+not been proven.
+
+## Looking up or down shifts my position
+
+Sometimes a large up/down head movement causes a small position change as well as rotation.
+It normally settles again quickly. Basalt may be briefly losing and reacquiring its room
+position, but that explanation is still a working theory.
+
+Good lighting and visible room detail help. Avoid blank walls, mirrors, dark rooms, and
+covering the G2 cameras with your hands.
+
+If the error is mainly height and does not settle, use the stillness correction below.
+
+## My height is too high or too low
+
+For a moderate height error:
+
+1. Stand upright at play centre.
+2. Look straight ahead.
+3. Keep your head completely still for at least 8 seconds.
+
+Height recovery then starts moving the view toward your saved eye height at 5 cm per
+second. It only runs while the headset is tracked, level, upright, inside the safe area, and
+still enough. Moving your head resets the wait.
+
+If the floor or full play space is wrong, use **Set floor again** or run:
 
 ```bash
 ./scripts/beat-saber-index.sh floor 10
 ```
 
-Moderate false vertical drift should recover after the configured still-and-level delay.
-A genuine tracking loss or out-of-envelope pose remains blocked. If tracking has diverged
-rather than merely shifted vertically, stop the complete VR session and start again in a
-well-lit, textured room.
+Keep the headset off the floor. Wear it at play centre during the countdown. The launcher
+will not save a floor from a tilted, unstable, or implausible pose.
 
-## Beat Saber loads a frozen map or controllers are on the floor
+If tracking has completely diverged, stop the whole VR session and start again in a
+well-lit room with visible detail.
+
+## Beat Saber is stuttering
+
+Check the game's SteamVR render resolution first. SteamVR sometimes chooses a very high
+per-application value, which can destroy frame rate even when the rest of VR is healthy.
+
+Open **SteamVR Settings → Video → Per-Application Video Settings → Beat Saber**. Set it to
+100% as a starting point, then lower it if the GPU still cannot hold the frame rate. Also
+close programs using a lot of GPU memory.
+
+## A map freezes or the controllers load on the floor
 
 Restart only the managed game first:
 
@@ -106,29 +151,32 @@ Restart only the managed game first:
 ./scripts/beat-saber-index.sh restart-modded
 ```
 
-This keeps SteamVR, floor calibration, and Space Calibrator alive. If the ready check also
+This keeps SteamVR, the saved floor, and Space Calibrator alive. If the ready check also
 fails, stop the full session and recalibrate instead.
 
-## Steam crashes when opening the VR desktop
+## Steam crashes when I open the VR desktop
 
-Use the launcher's direct Beat Saber action rather than SteamVR's desktop view. The control
-panel starts Steam with PipeWire support, but desktop capture and Steam Remote Play hosting
-still caused crashes on the verified system. The launcher warns when Remote Play hosting is
-enabled but does not silently change that setting.
+Use **Start VR + modded Beat Saber** instead of launching the game through SteamVR's desktop
+view. Desktop capture repeatedly crashed Steam on the test PC. The launcher starts Steam
+with PipeWire support and warns if Remote Play hosting is enabled, but direct game launch is
+still the dependable option on that machine.
+
+This may not affect every Linux desktop, so the launcher does not silently disable Remote
+Play or remove SteamVR features.
 
 ## Audio works but SteamVR's volume slider does not
 
-Use the PipeWire-aware launcher control:
+Use the control panel's volume setting, or run:
 
 ```bash
 ./scripts/beat-saber-index.sh volume 65
 ```
 
-If the G2 sink is missing, rerun the USB preflight and wake the headset before changing
-volume.
+The launcher controls the G2's PipeWire sink directly. If it cannot find the sink, rerun the
+USB check and wake the headset before changing the volume.
 
-## Logs
+## Finding logs
 
-The launcher stores its own logs under `~/.cache/reverb-g2` and discovers SteamVR's OpenVR
-log directory through `vrpathreg.sh`. Run `diagnose` instead of assuming a Steam library or
-log path.
+Launcher logs are under `~/.cache/reverb-g2`. SteamVR's OpenVR log folder is discovered with
+`vrpathreg.sh`, so it may not be where a generic guide expects. Run `diagnose` to print the
+resolved paths and recent errors.

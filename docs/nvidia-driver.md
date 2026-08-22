@@ -1,69 +1,78 @@
-# NVIDIA driver management
+# NVIDIA driver updates
 
-The G2's EDID leaves color depth undefined. On the tested NVIDIA releases, the driver chose
-a 6-bpc DisplayPort link and could not light the native 90 Hz mode correctly. The tracked
-patch series fixes the G2 link configuration, color-depth range, and the supporting VR
-display path.
+The Reverb G2 does not specify its colour depth in the EDID. On the NVIDIA releases we
+tested, the driver chose a 6-bpc DisplayPort link and could not light the full 90 Hz mode
+correctly. This repo carries the small driver patch series used to get a stable 8-bpc link.
+
+Your normal package manager still installs and updates NVIDIA. This tool patches the
+matching open-module source afterward, rebuilds DKMS, and updates the boot image.
 
 ## Supported drivers
 
-| Driver family | Applied patches | Tested result |
+| Driver | Patches used | Result tested in the headset |
 |---|---|---|
-| NVIDIA open 595.71.05 | `0001` through `0005` | Native 4320×2160 at 90 Hz |
-| NVIDIA open 610.57.04 | `0003` through `0005` | Native 4320×2160 at 90 Hz |
+| NVIDIA open 595.71.05 | `0001` to `0005` | 4320×2160 combined at 90 Hz |
+| NVIDIA open 610.57.04 | `0003` to `0005` | 4320×2160 combined at 90 Hz |
 
-The manager has series mappings only for the 595 and 610 families and validates every hunk
-against the installed source before changing it. The table above lists the exact versions
-that were physically tested. A later point release may already contain some fixes or may
-change private NVKMS source; a successful patch application is not enough to call it
-verified without a DKMS build, boot-image check, and physical headset test.
+The manager knows the 595 and 610 driver families, but those two exact versions are the
+ones physically tested. A later point release may have changed NVIDIA's private NVKMS
+source or included part of the fix already.
 
-## Check the current system
+The script checks every patch hunk before editing anything. Even so, a clean patch and DKMS
+build do not prove that a new driver works. The final test is both G2 screens running
+without flicker at 90 Hz.
+
+The patches require NVIDIA's **open kernel module**. Do not apply them to the proprietary
+kernel module.
+
+## Check the installed driver
 
 ```bash
 ./scripts/nvidia-g2-patch-manager.sh status
 ```
 
-The report distinguishes the running driver from the installed on-disk module. If they
-differ, a package update is waiting for a reboot. The on-disk source is audited so it can be
-patched before the reboot.
+This reports:
 
-The manager also reports:
-
-- whether the open kernel module is loaded;
-- the exact matching source tree under `/usr/src`;
-- the state of every required patch;
+- the driver currently loaded in memory;
+- the driver installed on disk;
+- whether the open module is in use;
+- the matching source folder under `/usr/src`;
+- each required patch;
 - the DKMS build for the current kernel; and
-- the G2 connector and exposed display modes when the headset is awake.
+- the G2 connector and modes, when the headset is awake.
 
-## Validate without changing the system
+If the running and installed versions differ, the package update is waiting for a reboot.
+The tool audits the new source on disk so you can patch it before rebooting.
+
+## Test the patch without changing anything
 
 ```bash
 ./scripts/nvidia-g2-patch-manager.sh validate
 ```
 
-Validation copies only the touched source files into a temporary tree and applies the full
-series there. It does not edit `/usr/src` or rebuild a module.
+This copies only the files touched by the patch into a temporary folder and tests the full
+series there. It does not edit `/usr/src` or rebuild the driver.
 
-## Apply and rebuild
+## Apply the patch
 
 ```bash
 ./scripts/nvidia-g2-patch-manager.sh apply
 ```
 
-The script requests root access only when it is ready to modify the real source tree. It:
+The script waits until it is ready to change the real source before asking for `sudo`. It
+then:
 
-1. validates the complete patch series on temporary copies;
-2. saves the original touched files under `/var/backups/reverb-g2-nvidia/<version>/`;
-3. applies missing patches to the matching source tree;
-4. rebuilds the module through DKMS for the current kernel; and
-5. refreshes mkinitcpio, update-initramfs, or dracut as detected.
+1. tests the complete patch on temporary copies;
+2. backs up the original files to `/var/backups/reverb-g2-nvidia/<version>/`;
+3. applies any missing patches;
+4. rebuilds NVIDIA through DKMS for the current kernel; and
+5. refreshes the boot image with mkinitcpio, update-initramfs, or dracut.
 
-It rebuilds even when the source already contains the patches. This repairs the case where
-the source is correct but the installed or boot-image module is stale. It never reboots
-automatically.
+It rebuilds DKMS even if the source already contains every patch. This fixes the common
+case where `/usr/src` is correct but the installed module or boot image is stale.
 
-After reboot:
+The tool never reboots automatically. When it tells you to reboot, do that yourself and
+then run:
 
 ```bash
 ./scripts/nvidia-g2-patch-manager.sh status
@@ -71,26 +80,27 @@ After reboot:
 ./scripts/g2-preflight.sh all
 ```
 
-The exact embedded-module comparison currently targets dracut with systemd-boot. The apply
-path still refreshes mkinitcpio and update-initramfs systems, but their check reports this
-limitation rather than pretending to compare the boot image.
+The exact embedded-module comparison currently works with dracut and systemd-boot. On
+mkinitcpio and update-initramfs systems, `apply` still refreshes the boot image, but the
+follow-up check explains that it cannot make the same exact comparison.
 
-## After a distribution driver update
+## After a normal NVIDIA update
 
-1. Do not assume the patched source or old DKMS module survived.
-2. Run `status` against the newly installed version.
-3. If the family is supported, run `validate` and `apply`.
-4. Reboot manually.
+1. Let your package manager finish installing NVIDIA.
+2. Run `./scripts/beat-saber-index.sh nvidia status`.
+3. For a supported family, run `validate` and then `apply` if patches are missing.
+4. Reboot when asked.
 5. Run `status`, the boot-image check where supported, and the full G2 preflight.
 
-If the manager refuses the new family, keep the previous working driver or test a port in a
-separate environment. Do not force an old patch onto changed NVKMS source.
+Do not assume an old DKMS build survived the update. If the manager refuses a new driver
+family, do not force an older patch onto it. Keep the previous working driver or test a
+proper patch port separately.
 
-## Recovery
+## If the rebuilt driver does not load
 
-Keep a fallback kernel or boot entry. If a rebuilt NVIDIA module fails, boot the fallback
-entry, restore the corresponding files from `/var/backups/reverb-g2-nvidia`, and reinstall
-the distribution driver package or rebuild DKMS normally.
+Keep a fallback kernel or boot entry before patching. Boot that entry, restore the matching
+files from `/var/backups/reverb-g2-nvidia`, and reinstall your distribution's NVIDIA package
+or rebuild DKMS normally.
 
-The individual changes and their upstream origins are documented in
+The individual changes and their upstream sources are listed in
 [`patches/nvidia/README.md`](../patches/nvidia/README.md).

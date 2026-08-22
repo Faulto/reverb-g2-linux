@@ -1,61 +1,64 @@
 # Installation
 
-This guide installs the supported G2, SteamVR, Lighthouse, and Index-controller stack.
-Envision and xrizer are not used by this profile.
+This is the full setup for a Reverb G2 headset with Index controllers. You only need to do
+most of it once.
 
-## Before you begin
+This setup uses Monado and Basalt for the G2, then adds Valve's Lighthouse driver for the
+Index controllers. It does not use Envision or xrizer.
 
-You need:
+## What you need
 
-- an HP Reverb G2 with DisplayPort and every USB function connected;
-- native Steam and SteamVR, launched at least once;
+- an HP Reverb G2 with DisplayPort and USB connected;
+- native Steam and SteamVR, opened at least once;
 - two Lighthouse base stations;
 - two Index controllers;
-- two Watchman receiver radios, one per controller; and
-- a well-lit play area with visible texture for the G2 tracking cameras.
+- two Watchman receiver dongles, one for each controller; and
+- a well-lit play area with visible detail on the walls and furniture.
 
-The supported NVIDIA path also needs the open kernel module, its matching source under
-`/usr/src`, DKMS, and a 595.x or 610.x driver. Do not apply this repository's patches to
-the proprietary NVIDIA kernel module.
+If you have an NVIDIA GPU, you also need the open kernel module and its matching source in
+`/usr/src`. The included display patches support the 595 and 610 driver families. They do
+not work with NVIDIA's proprietary kernel module.
 
-## 1. Build the pinned stack
+## 1. Build the VR software
+
+From the repository folder, run:
 
 ```bash
 ./scripts/setup-index-controllers.sh deps
 ./scripts/setup-index-controllers.sh all
 ```
 
-The first command installs build dependencies using `pacman`, `apt`, or `dnf`. The second
-command clones exact Monado, Basalt, and Space Calibrator commits under `~/vr`, applies the
-tracked patch series, builds them, and registers the resulting user-level drivers.
+The first command installs the build packages through `pacman`, `apt`, or `dnf`. The second
+downloads the tested Monado, Basalt, and Space Calibrator versions, patches them, builds
+them, and registers the SteamVR drivers.
 
-Set `G2_VR_ROOT` if you want the source and build trees elsewhere:
+They are stored under `~/vr` by default. To put them elsewhere:
 
 ```bash
 G2_VR_ROOT=/path/to/vr ./scripts/setup-index-controllers.sh all
 ```
 
-The setup script accepts existing source trees only when they exactly match either the clean
-pin or the complete patch series. It refuses unexplained edits instead of overwriting them.
+The script will not overwrite a source tree with unknown edits. It accepts either the clean
+tested version or this repo's complete patch set.
 
-## 2. Install device permissions
+## 2. Give your user access to the G2
 
 ```bash
 sudo install -m 0644 scripts/70-wmr-reverb.rules /etc/udev/rules.d/70-wmr-reverb.rules
 sudo udevadm control --reload-rules
 ```
 
-Reconnect the G2 afterward. The active desktop user needs a fresh `uaccess` ACL before
-Monado can open the tracking-camera interface.
+Unplug and reconnect the G2 after this. Reconnecting gives your desktop session permission
+to open the tracking cameras.
 
-Your distribution's Steam/Valve udev package must also grant access to both Watchman
-receivers. The preflight reports separately whether each radio is missing or merely
-inaccessible.
+Your distribution's Steam or Valve udev package must also allow access to both Watchman
+receivers. The hardware check tells you whether a receiver is missing or merely blocked by
+permissions.
 
-## 3. Enable multiple SteamVR drivers
+## 3. Let SteamVR load both drivers
 
-SteamVR must load the Monado HMD driver and Valve Lighthouse driver together. In SteamVR's
-`steamvr.vrsettings`, set:
+SteamVR needs the Monado headset driver and Valve Lighthouse driver at the same time. Find
+SteamVR's `steamvr.vrsettings` file and add this inside its existing `steamvr` section:
 
 ```json
 {
@@ -65,12 +68,12 @@ SteamVR must load the Monado HMD driver and Valve Lighthouse driver together. In
 }
 ```
 
-Merge the setting into the existing `steamvr` object; do not replace unrelated settings.
-The launcher checks this value and stops with an explicit error if it is absent.
+Keep any settings already in that section. Do not replace the whole file with this small
+example. The launcher checks the value and gives you a clear error if it is missing.
 
-## 4. Prepare NVIDIA 90 Hz support
+## 4. Fix 90 Hz on NVIDIA
 
-NVIDIA users should run:
+Skip this step on AMD or Intel. NVIDIA users should run:
 
 ```bash
 ./scripts/nvidia-g2-patch-manager.sh status
@@ -78,9 +81,11 @@ NVIDIA users should run:
 ./scripts/nvidia-g2-patch-manager.sh apply
 ```
 
-Reboot after `apply`, then rerun `status`. The launcher requires the native 4320×2160 mode
-and audits the patch state before starting SteamVR. See
-[NVIDIA driver management](nvidia-driver.md) before changing kernel-module source.
+`apply` asks for `sudo`, rebuilds the driver, and tells you when a reboot is needed. It does
+not reboot the PC for you. After rebooting, run `status` again.
+
+Read the [NVIDIA guide](nvidia-driver.md) before applying the patch if you use a different
+driver family or are unsure whether the open module is installed.
 
 ## 5. Install the control panel
 
@@ -88,64 +93,70 @@ and audits the patch state before starting SteamVR. See
 ./scripts/install-control-panel.sh
 ```
 
-This installs a user-level launcher and desktop entry that point back to the current clone.
-Rerun it if you move the repository.
+You will now have **Reverb G2 VR Control Panel** in your application menu. The entry points
+back to this clone, so rerun the installer if you move the repository.
 
-## 6. Run the hardware check
+## 6. Check the headset
 
 ```bash
 ./scripts/g2-preflight.sh all
 ```
 
-Do not continue until required checks pass. In particular, the G2 cable's SuperSpeed half
-and tracking cameras must negotiate at 5000 Mb/s. Seeing one G2 USB device is not enough;
-the headset is split across multiple USB 2 and USB 3 functions.
+Fix any reported failure before starting VR. The important USB results are 5000 Mb/s for
+the G2 cable's SuperSpeed half and 5000 Mb/s for the HoloLens tracking cameras. A G2 can
+still appear in `lsusb` when only half of its USB connection is working.
 
-## 7. Pair and calibrate Index controllers
+## 7. Pair and calibrate the Index controllers
 
-Pair one Index controller to each Watchman receiver. Ordinary host Bluetooth is not used.
-Place the receiver dongles away from the computer and from each other, preferably on USB
-extension leads.
+Pair one controller to each Watchman receiver. The controllers do not use ordinary PC
+Bluetooth. Put the receiver dongles on USB extension leads, away from the computer and away
+from each other. This makes a surprisingly large difference to tracking.
 
-Start the first session:
+Start VR:
 
 ```bash
 ./scripts/beat-saber-index.sh start-ui
 ```
 
-In the Space Calibrator desktop window choose:
+In the desktop Space Calibrator window, choose:
 
 - reference space: `monado`;
 - reference device: `HP Reverb Virtual Reality Headset G2`;
 - target space: `lighthouse`; and
 - target device: either Index controller.
 
-Hold the selected controller firmly against the headset so their relative position cannot
-change. Start regular calibration and move the headset/controller pair together through a
-wide figure eight with rotation. The saved transform applies to both controllers.
+For the first calibration, hold the selected controller firmly against the headset. Run a
+normal calibration while moving the headset and controller together in a wide figure eight
+with some rotation. The result is used for both controllers.
 
-Check the result while wearing the headset at play-centre:
+Put on the headset at play centre and check the saved spaces:
 
 ```bash
-./scripts/beat-saber-index.sh ready 1.76
+./scripts/beat-saber-index.sh ready 1.77
 ```
 
-Replace `1.76` with your standing eye height in metres. The value is also editable in the
-control panel settings.
+Replace `1.77` with your real standing eye height in metres. You can also change it with
+the control panel's **Settings** button.
 
-## 8. Optional modded Beat Saber setup
+## 8. Optional: modded Beat Saber
 
 Install [BSManager](https://github.com/Zagrios/bs-manager), choose its content and Proton
-folders, add a Beat Saber version with available core mods, and launch that managed version
-once from BSManager. The launcher reads BSManager's configured folders and last-launched
-version; it does not hard-code a game version or storage mount.
+folders, and install a Beat Saber version that has the mods you want. Launch that version
+once from BSManager so it can finish setting up.
+
+The default BSManager content folder under `~/.local/share/BSManager` is fine with Proton.
+The launcher finds BSManager's chosen folders and last-used game version, even if the games
+are on another drive.
 
 Put `bs-manager` on `PATH`, install it at `~/.local/opt/bs-manager/bs-manager`, or set the
-`BSMANAGER` environment variable. Then use **Start VR + modded Beat Saber** in the control
-panel.
+`BSMANAGER` environment variable. You can then use **Start VR + modded Beat Saber** from the
+control panel.
 
-For the normal Steam copy of Beat Saber, set this launch option:
+For an ordinary Steam copy of Beat Saber, add this Steam launch option:
 
 ```text
 PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1 %command%
 ```
+
+Installation is now finished. See [Using the launcher](using-the-launcher.md) for the normal
+start-up routine and the quick controller resync used between active songs.
