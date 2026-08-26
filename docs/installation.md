@@ -42,7 +42,8 @@ The script will not overwrite a source tree with unknown edits. It accepts the c
 version, this repo's complete patch set, and exact patch states installed by older releases.
 Known older states are upgraded in place; unknown hand edits are still refused.
 
-After pulling a repo update that changes Monado or Basalt patches, run the same command again:
+After pulling a repo update that changes Monado, Basalt, or Space Calibrator patches, run
+the same command again:
 
 ```bash
 ./scripts/setup-index-controllers.sh all

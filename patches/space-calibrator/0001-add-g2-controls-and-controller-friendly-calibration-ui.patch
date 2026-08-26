@@ -1,0 +1,401 @@
+diff --git a/src/overlay/CalibrationUI.cpp b/src/overlay/CalibrationUI.cpp
+index 84d228c..cca5ac6 100644
+--- a/src/overlay/CalibrationUI.cpp
++++ b/src/overlay/CalibrationUI.cpp
+@@ -19,6 +19,20 @@
+ #define EIGEN_MPL2_ONLY
+ #include <Eigen/Dense>
+ 
++namespace {
++
++float ControllerFriendlyButtonHeight()
++{
++	return std::max(64.0f, ImGui::GetTextLineHeightWithSpacing() * 3.0f);
++}
++
++float ControllerFriendlyRowHeight()
++{
++	return std::max(38.0f, ImGui::GetTextLineHeightWithSpacing() * 1.8f);
++}
++
++} // namespace
++
+ const char* GetPrettyTrackingSystemName(const std::string& system)
+ {
+ 	if (system == "lighthouse")
+@@ -249,7 +263,7 @@ void BuildDeviceSelection(const VRState &state, int &initialSelected, const std:
+ 			std::string uniqueId = label + "_pass0_" + std::to_string(iterator);
+ 			iterator++;
+ 			ImGui::PushID(uniqueId.c_str());
+-			ImGui::Selectable(label.c_str(), true);
++			ImGui::Selectable(label.c_str(), true, 0, ImVec2(0.0f, ControllerFriendlyRowHeight()));
+ 			ImGui::PopID();
+ 		}
+ 	}
+@@ -265,7 +279,8 @@ void BuildDeviceSelection(const VRState &state, int &initialSelected, const std:
+ 		std::string uniqueId = label + "_pass1_" + std::to_string(iterator);
+ 		iterator++;
+ 		ImGui::PushID(uniqueId.c_str());
+-		if (ImGui::Selectable(label.c_str(), selected == device.id)) {
++		if (ImGui::Selectable(label.c_str(), selected == device.id, 0,
++		                      ImVec2(0.0f, ControllerFriendlyRowHeight()))) {
+ 			selected = device.id;
+ 		}
+ 		ImGui::PopID();
+@@ -314,10 +329,10 @@ void BuildDeviceSelections(const VRState &state)
+ 	if (referenceStandby) referenceDeviceCount++;
+ 	if (targetStandby) targetDeviceCount++;
+ 	
+-	float buttonHeight = ImGui::GetTextLineHeightWithSpacing() + 4.0f + style.ItemSpacing.y;
++	float buttonHeight = ControllerFriendlyButtonHeight() + style.ItemSpacing.y;
+ 	float maxPaneHeight = avail.y - buttonHeight - style.ItemSpacing.y;
+ 	
+-	float itemHeight = ImGui::GetTextLineHeightWithSpacing();
++	float itemHeight = ControllerFriendlyRowHeight();
+ 	float headerHeight = itemHeight + style.ItemSpacing.y;
+ 	float referencePaneHeight = headerHeight + (referenceDeviceCount * itemHeight) + style.FramePadding.y * 2;
+ 	float targetPaneHeight = headerHeight + (targetDeviceCount * itemHeight) + style.FramePadding.y * 2;
+@@ -335,7 +350,8 @@ void BuildDeviceSelections(const VRState &state)
+ 	BuildDeviceSelection(state, CalCtx.targetID, CalCtx.targetTrackingSystem, CalCtx.targetStandby);
+ 	ImGui::EndChild();
+ 
+-	if (ImGui::Button("Identify selected devices (blinks LED or vibrates)", ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing() + 4.0f)))
++	if (ImGui::Button("Identify selected devices (blinks LED or vibrates)",
++	                  ImVec2(ImGui::GetContentRegionAvail().x, ControllerFriendlyButtonHeight())))
+ 	{
+ 		for (unsigned i = 0; i < 100; ++i)
+ 		{
+@@ -401,31 +417,35 @@ void BuildCalibrationMenu()
+ 		}
+ 
+ 		float width = ImGui::GetContentRegionAvail().x;
+-		int buttonCount = CalCtx.validProfile ? 4 : 3;
+-		float buttonWidth = (width - style.FramePadding.x * (buttonCount - 1)) / buttonCount;
++		const float largeButtonHeight = ControllerFriendlyButtonHeight();
+ 
+-		if (ImGui::Button("Start Calibration", ImVec2(buttonWidth, ImGui::GetTextLineHeight() * 2)))
++		if (ImGui::Button("Start Calibration", ImVec2(width, largeButtonHeight)))
+ 		{
+ 			StartCalibration();
+ 			ImGui::OpenPopup("Calibration Progress");
+ 		}
+ 
+-		ImGui::SameLine();
+-		if (ImGui::Button("Continuous Calibration", ImVec2(buttonWidth, ImGui::GetTextLineHeight() * 2))) {
++		const int secondaryButtonCount = CalCtx.validProfile ? 3 : 2;
++		const float secondaryButtonWidth =
++			(width - style.ItemSpacing.x * (secondaryButtonCount - 1)) / secondaryButtonCount;
++		if (ImGui::Button("Continuous Calibration",
++		                  ImVec2(secondaryButtonWidth, largeButtonHeight))) {
+ 			StartContinuousCalibration();
+ 		}
+ 
+ 		if (CalCtx.validProfile)
+ 		{
+ 			ImGui::SameLine();
+-			if (ImGui::Button("Edit Calibration", ImVec2(buttonWidth, ImGui::GetTextLineHeight() * 2)))
++			if (ImGui::Button("Edit Calibration",
++			                  ImVec2(secondaryButtonWidth, largeButtonHeight)))
+ 			{
+ 				CalCtx.state = CalibrationState::Editing;
+ 			}
+ 		}
+ 
+ 		ImGui::SameLine();
+-		if (ImGui::Button("Clear Calibration", ImVec2(buttonWidth, ImGui::GetTextLineHeight() * 2)))
++		if (ImGui::Button("Clear Calibration",
++		                  ImVec2(secondaryButtonWidth, largeButtonHeight)))
+ 		{
+ 			CalCtx.Clear();
+ 			ResetAllDeviceTransforms();
+@@ -580,7 +600,8 @@ void BuildCalibrationMenu()
+ 		if (CalCtx.state == CalibrationState::None)
+ 		{
+ 			ImGui::Text("");
+-			if (ImGui::Button("Close", ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight() * 2))) {
++			if (ImGui::Button("Close", ImVec2(ImGui::GetContentRegionAvail().x,
++			                                      ControllerFriendlyButtonHeight()))) {
+ 				CalCtx.messages.clear();
+ 				ImGui::CloseCurrentPopup();
+ 			}
+@@ -984,4 +1005,3 @@ void BuildPlayspaceMovementTab(PlayspaceMovement& playspaceMovement)
+ 		ImGui::TextWrapped("Enable playspace movement to use controller actions to reset or shift your playspace.");
+ 	}
+ }
+-
+diff --git a/src/overlay/main.cpp b/src/overlay/main.cpp
+index f440a5f..5ca187f 100644
+--- a/src/overlay/main.cpp
++++ b/src/overlay/main.cpp
+@@ -20,6 +20,9 @@
+ #include <thread>
+ #include <chrono>
+ #include <time.h>
++#include <cerrno>
++#include <cmath>
++#include <spawn.h>
+ 
+ #define GL_SILENCE_DEPRECATION
+ #if defined(IMGUI_IMPL_OPENGL_ES2)
+@@ -59,6 +62,8 @@ PFNGLBLITFRAMEBUFFERPROC glBlitFramebuffer = nullptr;
+ #include <sys/stat.h>
+ #include <fcntl.h>
+ 
++extern char **environ;
++
+ static GLFWwindow* glfwWindow = nullptr;
+ static vr::VROverlayHandle_t overlayMainHandle = 0, overlayThumbnailHandle = 0;
+ static GLuint fboHandle = 0, fboTextureHandle = 0;
+@@ -545,9 +550,234 @@ static PlayspaceMovement* g_playspaceMovement = nullptr;
+ 
+ AppConfig* g_appConfig = nullptr;
+ 
++namespace {
++
++struct G2ActionState {
++    pid_t pid = -1;
++    int outputFd = -1;
++    std::string output;
++    std::string description;
++    bool finished = false;
++    bool succeeded = false;
++    double floorDeadline = 0.0;
++};
++
++G2ActionState g_g2Action;
++
++std::string FindG2ActionHelper()
++{
++    const char* configured = std::getenv("REVERB_G2_ACTION_HELPER");
++    if (configured != nullptr && configured[0] != '\0') {
++        return configured;
++    }
++
++    const char* xdgBin = std::getenv("XDG_BIN_HOME");
++    if (xdgBin != nullptr && xdgBin[0] != '\0') {
++        return std::string(xdgBin) + "/reverb-g2-vr-action";
++    }
++
++    const char* home = std::getenv("HOME");
++    if (home != nullptr && home[0] != '\0') {
++        return std::string(home) + "/.local/bin/reverb-g2-vr-action";
++    }
++
++    return "reverb-g2-vr-action";
++}
++
++void AppendG2ActionOutput(const char* data, size_t size)
++{
++    constexpr size_t maxOutputBytes = 12000;
++    g_g2Action.output.append(data, size);
++    if (g_g2Action.output.size() > maxOutputBytes) {
++        g_g2Action.output.erase(0, g_g2Action.output.size() - maxOutputBytes);
++    }
++}
++
++void DrainG2ActionOutput()
++{
++    if (g_g2Action.outputFd < 0) {
++        return;
++    }
++
++    char buffer[1024];
++    while (true) {
++        const ssize_t count = read(g_g2Action.outputFd, buffer, sizeof(buffer));
++        if (count > 0) {
++            AppendG2ActionOutput(buffer, static_cast<size_t>(count));
++            continue;
++        }
++        if (count == 0) {
++            close(g_g2Action.outputFd);
++            g_g2Action.outputFd = -1;
++        }
++        if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
++            constexpr char message[] = "Unable to read action output.\n";
++            AppendG2ActionOutput(message, sizeof(message) - 1);
++            close(g_g2Action.outputFd);
++            g_g2Action.outputFd = -1;
++        }
++        break;
++    }
++}
++
++void StartG2Action(const char* action, const char* description)
++{
++    if (g_g2Action.pid > 0) {
++        return;
++    }
++
++    g_g2Action.output.clear();
++    g_g2Action.description = description;
++    g_g2Action.finished = false;
++    g_g2Action.succeeded = false;
++
++    int outputPipe[2];
++    if (pipe(outputPipe) != 0) {
++        g_g2Action.output = std::string("Unable to create action pipe: ") + std::strerror(errno);
++        g_g2Action.finished = true;
++        return;
++    }
++
++    const int flags = fcntl(outputPipe[0], F_GETFL, 0);
++    if (flags >= 0) {
++        fcntl(outputPipe[0], F_SETFL, flags | O_NONBLOCK);
++    }
++
++    const std::string helper = FindG2ActionHelper();
++    posix_spawn_file_actions_t fileActions;
++    posix_spawn_file_actions_init(&fileActions);
++    posix_spawn_file_actions_adddup2(&fileActions, outputPipe[1], STDOUT_FILENO);
++    posix_spawn_file_actions_adddup2(&fileActions, outputPipe[1], STDERR_FILENO);
++    posix_spawn_file_actions_addclose(&fileActions, outputPipe[0]);
++    posix_spawn_file_actions_addclose(&fileActions, outputPipe[1]);
++
++    char* argv[] = {
++        const_cast<char*>(helper.c_str()),
++        const_cast<char*>(action),
++        nullptr,
++    };
++    pid_t childPid = -1;
++    const int spawnError = posix_spawnp(
++        &childPid, helper.c_str(), &fileActions, nullptr, argv, environ);
++    posix_spawn_file_actions_destroy(&fileActions);
++    close(outputPipe[1]);
++
++    if (spawnError != 0) {
++        close(outputPipe[0]);
++        g_g2Action.output = std::string("Unable to start reverb-g2-vr-action: ") +
++                            std::strerror(spawnError);
++        g_g2Action.finished = true;
++        return;
++    }
++
++    g_g2Action.pid = childPid;
++    g_g2Action.outputFd = outputPipe[0];
++}
++
++void UpdateG2Action()
++{
++    if (g_g2Action.floorDeadline > 0.0 && glfwGetTime() >= g_g2Action.floorDeadline) {
++        g_g2Action.floorDeadline = 0.0;
++        StartG2Action("set-floor", "Setting floor");
++    }
++
++    if (g_g2Action.pid <= 0) {
++        return;
++    }
++
++    DrainG2ActionOutput();
++    int status = 0;
++    const pid_t result = waitpid(g_g2Action.pid, &status, WNOHANG);
++    if (result == g_g2Action.pid) {
++        DrainG2ActionOutput();
++        if (g_g2Action.outputFd >= 0) {
++            close(g_g2Action.outputFd);
++            g_g2Action.outputFd = -1;
++        }
++        g_g2Action.pid = -1;
++        g_g2Action.finished = true;
++        g_g2Action.succeeded = WIFEXITED(status) && WEXITSTATUS(status) == 0;
++    } else if (result < 0) {
++        constexpr char message[] = "Unable to monitor action process.\n";
++        AppendG2ActionOutput(message, sizeof(message) - 1);
++        if (g_g2Action.outputFd >= 0) {
++            close(g_g2Action.outputFd);
++            g_g2Action.outputFd = -1;
++        }
++        g_g2Action.pid = -1;
++        g_g2Action.finished = true;
++        g_g2Action.succeeded = false;
++    }
++}
++
++float G2ButtonHeight()
++{
++    return std::max(64.0f, ImGui::GetTextLineHeightWithSpacing() * 3.0f);
++}
++
++void BuildG2ControlsTab()
++{
++    const bool actionRunning = g_g2Action.pid > 0;
++    const bool floorCountdown = g_g2Action.floorDeadline > 0.0;
++    const float width = ImGui::GetContentRegionAvail().x;
++    const float buttonHeight = G2ButtonHeight();
++
++    ImGui::TextWrapped(
++        "These controls use the same checked commands as the desktop Reverb G2 control panel.");
++    ImGui::Spacing();
++
++    ImGui::BeginDisabled(actionRunning || floorCountdown);
++    if (ImGui::Button("Start modded Beat Saber", ImVec2(width, buttonHeight))) {
++        StartG2Action("start-modded", "Starting modded Beat Saber");
++    }
++    ImGui::Spacing();
++    if (ImGui::Button("Set floor (10 second countdown)", ImVec2(width, buttonHeight))) {
++        g_g2Action.output.clear();
++        g_g2Action.description = "Waiting to set floor";
++        g_g2Action.finished = false;
++        g_g2Action.succeeded = false;
++        g_g2Action.floorDeadline = glfwGetTime() + 10.0;
++    }
++    ImGui::EndDisabled();
++
++    if (floorCountdown) {
++        const int remaining = std::max(
++            1, static_cast<int>(std::ceil(g_g2Action.floorDeadline - glfwGetTime())));
++        ImGui::Spacing();
++        ImGui::TextWrapped(
++            "Stand upright at play-centre and keep your head still. Setting the floor in %d...",
++            remaining);
++        if (ImGui::Button("Cancel floor reset", ImVec2(width, buttonHeight))) {
++            g_g2Action.floorDeadline = 0.0;
++            g_g2Action.description.clear();
++        }
++    } else if (actionRunning) {
++        ImGui::Spacing();
++        ImGui::TextWrapped("%s...", g_g2Action.description.c_str());
++    } else if (g_g2Action.finished) {
++        ImGui::Spacing();
++        if (g_g2Action.succeeded) {
++            ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "%s succeeded.",
++                               g_g2Action.description.c_str());
++        } else {
++            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.3f, 1.0f), "%s failed.",
++                               g_g2Action.description.c_str());
++        }
++    }
++
++    if (!g_g2Action.output.empty()) {
++        ImGui::Spacing();
++        ImGui::Separator();
++        ImGui::TextWrapped("%s", g_g2Action.output.c_str());
++    }
++}
++
++} // namespace
++
+ void BuildMainWindow(VRState& vrState, AppConfig& config, bool runningInOverlay = false)
+ {
+ 	g_appConfig = &config;
++    UpdateG2Action();
+     auto& io = ImGui::GetIO();
+     ImGuiWindowFlags windowFlags = 
+         ImGuiWindowFlags_NoTitleBar | 
+@@ -586,6 +816,12 @@ void BuildMainWindow(VRState& vrState, AppConfig& config, bool runningInOverlay
+             BuildCalibrationTab(vrState);
+             ImGui::EndTabItem();
+         }
++
++        if (ImGui::BeginTabItem("G2 Controls"))
++        {
++            BuildG2ControlsTab();
++            ImGui::EndTabItem();
++        }
+         
+         if (ImGui::BeginTabItem("Telemetry"))
+         {
+@@ -976,4 +1212,3 @@ int main(int argc, char* argv[])
+     glfwTerminate();
+     return 0;
+ }
+-

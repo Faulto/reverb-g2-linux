@@ -9,6 +9,7 @@ APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
 mkdir -p "$BIN_DIR" "$APP_DIR"
 ln -sfn "$REPO/scripts/g2-control-panel.sh" "$BIN_DIR/reverb-g2-control-panel"
+ln -sfn "$REPO/scripts/vr-overlay-action.sh" "$BIN_DIR/reverb-g2-vr-action"
 desktop_tmp="$(mktemp "$APP_DIR/reverb-g2-control-panel.desktop.XXXXXX")"
 awk -v executable="$BIN_DIR/reverb-g2-control-panel" \
     '{ gsub(/@CONTROL_PANEL@/, executable); print }' \
@@ -24,5 +25,6 @@ if command -v kbuildsycoca6 >/dev/null 2>&1; then
 fi
 
 printf 'Installed: %s\n' "$BIN_DIR/reverb-g2-control-panel"
+printf 'VR overlay helper: %s\n' "$BIN_DIR/reverb-g2-vr-action"
 printf 'Desktop entry: %s\n' "$APP_DIR/reverb-g2-control-panel.desktop"
 printf 'Resolved checkout: %s\n' "$REPO"

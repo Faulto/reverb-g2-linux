@@ -42,6 +42,8 @@ the older [Wintch/reverb-g2](https://github.com/Wintch/reverb-g2) research repo.
 - Limits bad tracking jumps and helps correct small height drift.
 - Starts an existing BSManager-managed Beat Saber copy directly, without opening SteamVR's
   desktop view.
+- Adds large in-headset buttons to the Space Calibrator overlay for starting modded Beat
+  Saber and safely resetting the floor.
 - Gives you simple buttons for settings, diagnostics, game restart, volume, and shutdown.
 
 ## Known rough edges
@@ -177,6 +179,11 @@ when the countdown reaches zero.
 For modded Beat Saber, first complete the separate [BSManager setup](docs/bsmanager.md), then
 click **Start VR + modded Beat Saber** instead. This repo launches and checks an existing
 managed copy; it does not download BSManager, Beat Saber versions, or mods for you.
+
+Once SteamVR is running, open its dashboard and select **Space Calibrator → G2 Controls**.
+That in-headset tab can start the configured modded Beat Saber instance or reset the floor
+after a visible 10-second countdown. Floor capture still uses the same stability and pose
+checks as the desktop control panel.
 
 You can also use the terminal:
 

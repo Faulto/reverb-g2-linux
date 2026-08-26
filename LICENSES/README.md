@@ -10,6 +10,7 @@ remain subject to the corresponding upstream license:
 |---|---|---|
 | `patches/monado-wmr/` | Monado / Project-VR Monado | `Boost-1.0.txt` |
 | `patches/basalt-wmr/` | Basalt | `BSD-3-Clause-Basalt.txt` |
+| `patches/space-calibrator/` | OpenVR Space Calibrator for Linux | `MIT-Space-Calibrator.txt` |
 | `patches/nvidia/` | NVIDIA open-gpu-kernel-modules | `NVIDIA-open-kernel-modules-COPYING.txt` |
 
 Source trees and binaries are not vendored. The setup scripts download them

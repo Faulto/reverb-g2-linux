@@ -41,6 +41,7 @@ jobs:
             scripts/beat-saber-index.sh \
             scripts/g2-preflight.sh \
             scripts/g2-control-panel.sh \
+            scripts/vr-overlay-action.sh \
             scripts/install-control-panel.sh \
             scripts/nvidia-g2-patch-manager.sh \
             scripts/sync-nvidia-initramfs.sh
@@ -68,6 +69,16 @@ jobs:
           source scripts/setup-index-controllers.sh
           apply_verified_series Basalt /tmp/basalt "$GITHUB_WORKSPACE/patches/basalt-wmr"
           apply_verified_series Basalt /tmp/basalt "$GITHUB_WORKSPACE/patches/basalt-wmr"
+
+      - name: Verify Space Calibrator patch series against pinned source
+        run: |
+          git clone https://github.com/xi-ve/openvr-space-calibrator-linux.git /tmp/space-calibrator
+          git -C /tmp/space-calibrator checkout --detach 28e3f83f7bc9808f145fac03ff8a8e455ab211fe
+          source scripts/setup-index-controllers.sh
+          apply_verified_series 'OpenVR Space Calibrator' /tmp/space-calibrator \
+            "$GITHUB_WORKSPACE/patches/space-calibrator"
+          apply_verified_series 'OpenVR Space Calibrator' /tmp/space-calibrator \
+            "$GITHUB_WORKSPACE/patches/space-calibrator"
 
       - name: Verify NVIDIA patch series against tested releases
         run: |

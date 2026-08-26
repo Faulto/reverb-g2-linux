@@ -20,6 +20,19 @@ shown below and opens a terminal so you can see what passed or failed.
 You do not have to hold the headset while the hardware checks run. The important part is
 wearing it in the right place before the countdown reaches zero.
 
+## In-headset controls
+
+Open the SteamVR dashboard, choose **Space Calibrator**, then open **G2 Controls**. It has
+two large controller-friendly buttons:
+
+- **Start modded Beat Saber** launches BSManager's last configured modded instance without
+  opening the SteamVR desktop.
+- **Set floor** gives you 10 seconds to stand upright at play-centre, then runs the normal
+  validated floor capture. A failed stability or pose check keeps the previous floor.
+
+The normal calibration screen also uses taller device rows, a full-width **Start
+Calibration** button, and a larger **Close** button after tracking sync completes.
+
 ## Useful commands
 
 | Command | What it does |

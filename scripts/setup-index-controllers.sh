@@ -284,6 +284,8 @@ prepare_sources() {
 
     ensure_checkout 'OpenVR Space Calibrator' "$SPACECAL_URL" "$SPACECAL_SOURCE" "$SPACECAL_COMMIT"
     update_pinned_submodules 'OpenVR Space Calibrator' "$SPACECAL_SOURCE"
+    apply_verified_series 'OpenVR Space Calibrator' "$SPACECAL_SOURCE" \
+        "$REPO/patches/space-calibrator"
 }
 
 build_sources() {
@@ -336,7 +338,7 @@ build_sources() {
 }
 
 install_user_stack() {
-    local steamvr vrpathreg active_dir active_runtime spacecal_driver spacecal_bin
+    local steamvr vrpathreg active_dir active_runtime spacecal_driver spacecal_bin bin_dir
     steamvr="${STEAMVR_DIR:-$(find_steamvr 2>/dev/null || true)}"
     [ -n "$steamvr" ] || die 'native SteamVR was not found; install it or set STEAMVR_DIR'
     vrpathreg="$steamvr/bin/vrpathreg.sh"
@@ -380,10 +382,15 @@ install_user_stack() {
     chmod 0755 "$spacecal_bin/space-calibrator"
     "$vrpathreg" adddriver "$spacecal_driver" >/dev/null 2>&1 || true
 
+    bin_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
+    mkdir -p "$bin_dir"
+    ln -sfn "$REPO/scripts/vr-overlay-action.sh" "$bin_dir/reverb-g2-vr-action"
+
     printf 'User stack installed.\n'
     printf '  OpenXR: %s -> %s\n' "$active_runtime" "$MONADO/build/openxr_monado-dev.json"
     printf '  Monado SteamVR driver: %s\n' "$MONADO/build/steamvr-monado"
     printf '  Space Calibrator driver: %s\n' "$spacecal_driver"
+    printf '  In-headset action helper: %s\n' "$bin_dir/reverb-g2-vr-action"
     printf '\nInstall the G2 udev rule once, then reconnect the headset:\n'
     printf '  sudo install -m 0644 %q /etc/udev/rules.d/70-wmr-reverb.rules\n' "$REPO/scripts/70-wmr-reverb.rules"
     printf '  sudo udevadm control --reload-rules\n'
