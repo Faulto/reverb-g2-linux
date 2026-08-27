@@ -72,6 +72,7 @@ what the launcher found on its own.
 | `BSMANAGER` | Native BSManager executable |
 | `BSMANAGER_CONFIG` | Native BSManager `config.json` file |
 | `NVIDIA_SOURCE_DIR` | Exact NVIDIA open-module source folder |
+| `G2_VRSERVER_MAX_RSS_MIB` | Requested `vrserver` safety-stop limit in MiB (default 4096, minimum 1024) |
 
 ## Sending a compatibility report
 

@@ -40,6 +40,8 @@ the older [Wintch/reverb-g2](https://github.com/Wintch/reverb-g2) research repo.
 - Starts SteamVR only after the hardware and display checks pass.
 - Sets a fresh floor and play centre each time VR starts.
 - Limits bad tracking jumps and helps correct small height drift.
+- Bounds Basalt's landmark-recall cache so a long session cannot quietly fill system RAM.
+- Watches SteamVR's `vrserver` memory and stops a broken session before the PC freezes.
 - Starts an existing BSManager-managed Beat Saber copy directly, without opening SteamVR's
   desktop view.
 - Adds large in-headset buttons to the Space Calibrator overlay for starting modded Beat
@@ -73,6 +75,17 @@ After 8 seconds the height correction starts moving you back toward the saved 1.
 height at 5 cm per second. A larger error takes a few more seconds to finish.
 
 If the whole play space is wrong, use **Set floor again** in the control panel instead.
+
+### `vrserver` keeps using more RAM
+
+Basalt's landmark-recall code used to keep old camera patches for the whole session and
+never delete them. With front-camera recall enabled, one real session reached 49 GB in
+about an hour. The included Basalt patch now keeps the live landmarks and a recent working
+set, while placing a hard limit on the cache.
+
+There is a second safety net in the launcher. It watches `vrserver` and stops the VR
+session if its real RAM use stays over 4 GB. On a PC with less memory, it uses half of
+physical RAM as the lower limit. You can start VR again normally after it closes.
 
 ### Beat Saber suddenly stutters
 
@@ -205,7 +218,7 @@ New installs now start with the profile that worked best in our Beat Saber testi
 | Tracking smoothing | Off | Lowest head-motion latency |
 | SLAM prediction | Dead reckoning | Best overall movement in testing |
 | SteamVR angular prediction | On, 100% | Helps rotation feel immediate |
-| Basalt landmark recall | Front camera | Helped the tested room without the cost of all-camera recall |
+| Basalt landmark recall | Front camera | Helped the tested room; its image-patch cache is now bounded |
 | Camera auto-exposure | On | Best general lighting behaviour |
 | Unified camera exposure | Off | The safer default; unified exposure is experimental |
 | Height recovery | On, after 8 seconds | Corrects small height drift while you stand still and level |

@@ -117,9 +117,13 @@ STARTUP_LOG="${G2_STEAMVR_STARTUP_LOG:-$CACHE_DIR/steamvr-startup.log}"
 SPACECAL_LOG="${G2_SPACECAL_LOG:-$CACHE_DIR/space-calibrator.log}"
 STEAM_CLIENT_LOG="${G2_STEAM_CLIENT_LOG:-$CACHE_DIR/steam-client.log}"
 MODDED_GAME_LOG="${G2_MODDED_GAME_LOG:-$CACHE_DIR/beat-saber-modded.log}"
+MEMORY_GUARD_LOG="${G2_MEMORY_GUARD_LOG:-$CACHE_DIR/vrserver-memory-guard.log}"
 SPACECAL_UNIT=reverb-g2-space-calibrator.service
 STEAM_UNIT=reverb-g2-steam.service
 MODDED_GAME_UNIT=reverb-g2-beat-saber-modded.service
+MEMORY_GUARD_UNIT=reverb-g2-vrserver-memory-guard.service
+MEMORY_GUARD_PID_FILE="$CACHE_DIR/vrserver-memory-guard.pid"
+MEMORY_GUARD="$REPO/scripts/vrserver-memory-guard.sh"
 TRACKING_SOURCE="$REPO/scripts/openvr-tracking.cpp"
 TRACKING_BINARY="${XDG_CACHE_HOME:-$HOME/.cache}/reverb-g2/openvr-tracking"
 TIMING_SOURCE="$REPO/scripts/openvr-frame-timing.cpp"
@@ -413,6 +417,74 @@ stop_user_unit() {
     systemctl --user reset-failed "$1" >/dev/null 2>&1 || true
 }
 
+stop_memory_guard() {
+    local guard_pid=""
+
+    # When the guard itself asks the launcher to stop VR, leave it alive long
+    # enough to SIGKILL a leaking vrserver that ignores the clean shutdown.
+    [ "${G2_MEMORY_GUARD_ACTIVE:-false}" = true ] && return 0
+
+    stop_user_unit "$MEMORY_GUARD_UNIT"
+    if [ -r "$MEMORY_GUARD_PID_FILE" ]; then
+        guard_pid="$(cat "$MEMORY_GUARD_PID_FILE" 2>/dev/null || true)"
+        if [[ "$guard_pid" =~ ^[0-9]+$ ]] && \
+           tr '\0' ' ' <"/proc/$guard_pid/cmdline" 2>/dev/null | rg -q --fixed-strings "$MEMORY_GUARD"; then
+            kill -TERM "$guard_pid" 2>/dev/null || true
+        fi
+        rm -f "$MEMORY_GUARD_PID_FILE"
+    fi
+}
+
+start_memory_guard() {
+    local server_pid="$1" max_rss_mib="${G2_VRSERVER_MAX_RSS_MIB:-4096}"
+    local env_name guard_pid
+    local -a guard_env=()
+    local -a direct_env=()
+
+    if [ ! -x "$MEMORY_GUARD" ]; then
+        printf 'Memory guard is missing or not executable: %s\n' "$MEMORY_GUARD" >&2
+        return 1
+    fi
+    [[ "$server_pid" =~ ^[0-9]+$ ]] || return 1
+    [ "$(cat "/proc/$server_pid/comm" 2>/dev/null)" = vrserver ] || return 1
+    if ! [[ "$max_rss_mib" =~ ^[0-9]+$ ]] || [ "$max_rss_mib" -lt 1024 ]; then
+        printf 'G2_VRSERVER_MAX_RSS_MIB must be a whole number of at least 1024.\n' >&2
+        return 1
+    fi
+
+    stop_memory_guard
+    : >"$MEMORY_GUARD_LOG"
+    for env_name in DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS XDG_SESSION_TYPE; do
+        if [ -n "${!env_name:-}" ]; then
+            guard_env+=(--setenv="$env_name=${!env_name}")
+            direct_env+=("$env_name=${!env_name}")
+        fi
+    done
+
+    if have_user_systemd; then
+        systemd-run --user --quiet --collect \
+            --unit="${MEMORY_GUARD_UNIT%.service}" \
+            --same-dir \
+            --property="StandardOutput=append:$MEMORY_GUARD_LOG" \
+            --property="StandardError=append:$MEMORY_GUARD_LOG" \
+            "${guard_env[@]}" \
+            "$MEMORY_GUARD" "$server_pid" "$0" "$max_rss_mib"
+        sleep 0.1
+        systemctl --user is-active --quiet "$MEMORY_GUARD_UNIT" || return 1
+    else
+        nohup env "${direct_env[@]}" \
+            "$MEMORY_GUARD" "$server_pid" "$0" "$max_rss_mib" \
+            >>"$MEMORY_GUARD_LOG" 2>&1 &
+        guard_pid=$!
+        printf '%s\n' "$guard_pid" >"$MEMORY_GUARD_PID_FILE"
+        sleep 0.1
+        kill -0 "$guard_pid" 2>/dev/null || return 1
+    fi
+
+    printf 'vrserver memory guard: requested stop limit %s MiB RSS (log: %s)\n' \
+        "$max_rss_mib" "$MEMORY_GUARD_LOG"
+}
+
 start_steam_client_pipewire() {
     local env_name steam_command
     local -a steam_env=()
@@ -577,6 +649,7 @@ select_runtime() {
 
 stop_vr_processes() {
     local process_name process_pid
+    stop_memory_guard
     stop_user_unit "$MODDED_GAME_UNIT"
     stop_user_unit "$SPACECAL_UNIT"
     pkill -TERM -f '[B]eat Saber\.exe' 2>/dev/null || true
@@ -613,7 +686,8 @@ stop_session() {
 }
 
 show_status() {
-    local connector="" modes="not available" radios runtime="none"
+    local connector="" guard_pid="" modes="not available" radios runtime="none"
+    local server_pid="" server_rss_kib=0
     connector="$(g2_connector 2>/dev/null || true)"
     radios="$(watchman_radio_count)"
     [ -e "$ACTIVE_RUNTIME" ] && runtime="$(readlink -f "$ACTIVE_RUNTIME" 2>/dev/null || printf unknown)"
@@ -627,8 +701,28 @@ show_status() {
     printf 'Watchman radios: %s/2\n' "$radios"
     printf 'OpenXR runtime: %s\n' "$runtime"
     show_settings
-    pgrep -a -x vrserver 2>/dev/null || printf 'vrserver: stopped\n'
+    server_pid="$(pgrep -n -x vrserver 2>/dev/null || true)"
+    if [ -n "$server_pid" ]; then
+        server_rss_kib="$(awk '/^VmRSS:/ { print $2; exit }' "/proc/$server_pid/status" 2>/dev/null || true)"
+        [[ "$server_rss_kib" =~ ^[0-9]+$ ]] || server_rss_kib=0
+        printf 'vrserver: PID %s, %s MiB RSS\n' "$server_pid" \
+            "$((server_rss_kib / 1024))"
+    else
+        printf 'vrserver: stopped\n'
+    fi
     pgrep -a -x vrcompositor 2>/dev/null || printf 'vrcompositor: stopped\n'
+    if have_user_systemd && systemctl --user is-active --quiet "$MEMORY_GUARD_UNIT"; then
+        printf 'vrserver memory guard: running\n'
+    elif [ -r "$MEMORY_GUARD_PID_FILE" ]; then
+        guard_pid="$(cat "$MEMORY_GUARD_PID_FILE" 2>/dev/null || true)"
+        if [[ "$guard_pid" =~ ^[0-9]+$ ]] && kill -0 "$guard_pid" 2>/dev/null; then
+            printf 'vrserver memory guard: running\n'
+        else
+            printf 'vrserver memory guard: stopped\n'
+        fi
+    else
+        printf 'vrserver memory guard: stopped\n'
+    fi
     if [ -f "$COMPOSITOR_LOG" ] && tail -n 300 "$COMPOSITOR_LOG" | \
         rg -q 'Unable to allocate memory|CreateMSAARenderTextures|Failed to create render textures'; then
         printf 'Last compositor result: GPU-memory allocation failed\n'
@@ -1018,6 +1112,13 @@ start_session() {
         exit 1
     fi
 
+    server_pid="$(pgrep -n -x vrserver 2>/dev/null || true)"
+    if ! start_memory_guard "$server_pid"; then
+        stop_vr_processes
+        python3 "$REPO/scripts/panel.py" off >/dev/null 2>&1 || true
+        die "SteamVR started, but its memory guard did not. Inspect $MEMORY_GUARD_LOG"
+    fi
+
     select_runtime "$STEAMVR_RUNTIME"
 
     printf '\nAuto-setting the 5 x 5 m standing space from the validated startup pose...\n'
@@ -1090,6 +1191,10 @@ show_diagnostics() {
     if [ -f "$SERVER_LOG" ]; then
         printf '\n=== recent VR errors ===\n'
         tail -n 400 "$SERVER_LOG" | rg -i 'error|fail|disconnect|not tracking' | tail -20 || printf 'No recent matching vrserver errors.\n'
+    fi
+    if [ -s "$MEMORY_GUARD_LOG" ]; then
+        printf '\n=== vrserver memory guard ===\n'
+        tail -n 12 "$MEMORY_GUARD_LOG"
     fi
     return "$result"
 }

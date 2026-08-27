@@ -19,6 +19,7 @@ The useful behavior changes are:
 | 0011 | Bound statistics storage that otherwise grew by about 72 MB per hour in the upstream nine-hour test. |
 | 0012 | Give Basalt worker threads recognizable names for performance diagnosis. |
 | 0013 | Expose this launcher’s `BASALT_FEATURE_RECALL=off|front|all` setting. |
+| 0014 | Bound feature-recall image patches. Live VIO landmarks and recent pipeline entries remain recallable, while unreachable session history is pruned before it can grow `vrserver` to tens of gigabytes. |
 
 The `legacy/` directory contains the previous recall-only series. It is not
 applied to a fresh build; the setup script uses it only to recognize and safely

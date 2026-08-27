@@ -73,8 +73,8 @@ edit_settings() {
         *) prediction_label='Dead reckoning — recommended G2 setting' ;;
     esac
     case "$recall" in
-        front) recall_label='Front camera — tested default, moderate cost' ;;
-        all) recall_label='All cameras — experimental, high CPU/memory' ;;
+        front) recall_label='Front camera — tested default, bounded cache' ;;
+        all) recall_label='All cameras — experimental, higher processing cost' ;;
         *) recall_label='Off — lower resource use' ;;
     esac
 
@@ -85,7 +85,7 @@ edit_settings() {
         --field='SLAM prediction — how Monado advances the last Basalt pose:CB' "$prediction_label!Dead reckoning — recommended G2 setting!Gyro only — less translation prediction; drifted in G2 test!Accel + gyro — intermediate IMU prediction!Pose only — uses recent visual poses!None — diagnostic, highest latency" \
         --field='Let SteamVR predict rotation to photon time:CHK' "$angular" \
         --field='SteamVR angular prediction strength (100 = current):NUM' "$strength!0..150!5!0" \
-        --field='Basalt landmark recall — may reduce drift/relocalisation:CB' "$recall_label!Front camera — tested default, moderate cost!Off — lower resource use!All cameras — experimental, high CPU/memory" \
+        --field='Basalt landmark recall — may reduce drift/relocalisation:CB' "$recall_label!Front camera — tested default, bounded cache!Off — lower resource use!All cameras — experimental, higher processing cost" \
         --field='Camera auto-exposure — keep on unless testing lighting:CHK' "$autoexposure" \
         --field='Use one exposure for all four cameras — experimental:CHK' "$unify_exposure" \
         --field='Recover false height drift while upright — avoids mild-drift grey screens:CHK' "$height_recovery" \

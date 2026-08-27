@@ -138,6 +138,7 @@ maintained_paths = {
     Path("scripts/nvidia-g2-patch-manager.sh"),
     Path("scripts/setup-index-controllers.sh"),
     Path("scripts/sync-nvidia-initramfs.sh"),
+    Path("scripts/vrserver-memory-guard.sh"),
 }
 personal_home = re.compile(rb"/home/[A-Za-z0-9._-]+")
 personal_paths = []

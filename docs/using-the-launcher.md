@@ -113,7 +113,8 @@ The control panel explains each option. Change one at a time and restart VR betw
 - **SteamVR angular prediction** helps the compositor predict head rotation. It does not
   change Basalt itself.
 - **Landmark recall** lets Basalt reuse older visual landmarks. Front-camera recall is the
-  tested default. All-camera recall needs more CPU and memory.
+  tested default. The patched cache keeps live and recent landmarks but cannot grow without
+  limit. All-camera recall still costs more processing time.
 - **Unified exposure** is experimental. Leave it off unless you are testing a lighting
   problem.
 - **Height recovery** corrects moderate false vertical drift while you remain upright,
@@ -122,6 +123,11 @@ The control panel explains each option. Change one at a time and restart VR betw
 The patched driver also rejects impossible jumps and excessive-speed poses before they
 reach SteamVR. Your choices are stored in `~/.config/reverb-g2/session.conf` and take effect
 the next time VR starts.
+
+The launcher also watches `vrserver` while VR is running. Normal use is far below the 4 GB
+limit. If its real memory use stays above that limit for three checks, the launcher closes
+the session and powers off the panel before the desktop is forced into heavy swapping. Run
+`diagnose` to see the guard state and its latest messages.
 
 ## Beat Saber performance
 

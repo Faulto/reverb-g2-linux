@@ -1,0 +1,123 @@
+From 6ca78b652a08239284ed969156a0526a5244dbb2 Mon Sep 17 00:00:00 2001
+From: Reverb G2 Linux contributors <noreply@example.invalid>
+Date: Thu, 27 Aug 2026 21:00:00 +1000
+Subject: [PATCH] optical_flow: bound feature-recall patch cache
+
+Frame-to-frame feature recall stores a multi-level image patch for every new
+keypoint. The cache was never pruned, allowing vrserver to accumulate roughly
+49 GiB of private RSS during a one-hour Reverb G2 session.
+
+Keep all landmarks present in the latest VIO landmark bundle and a 4096-ID
+grace window for points still travelling through the frontend/backend queues.
+Prune older unreachable entries whenever the cache reaches 16384 entries, and
+stop inserting at that ceiling if every retained entry is still live. Missing
+patches are skipped rather than throwing from unordered_map::at().
+
+The live landmark set and recent pipeline entries therefore retain their
+existing recall behaviour while stale session history can no longer consume
+unbounded memory.
+---
+ .../optical_flow/frame_to_frame_optical_flow.h     | 60 +++++++++++++++++++---
+ 1 file changed, 52 insertions(+), 8 deletions(-)
+
+diff --git a/include/basalt/optical_flow/frame_to_frame_optical_flow.h b/include/basalt/optical_flow/frame_to_frame_optical_flow.h
+index 8ab5942..33e3552 100644
+--- a/include/basalt/optical_flow/frame_to_frame_optical_flow.h
++++ b/include/basalt/optical_flow/frame_to_frame_optical_flow.h
+@@ -57,6 +57,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #include <chrono>
+ #include <cstdlib>
+ #include <iostream>
++#include <unordered_set>
+ 
+ namespace basalt {
+ 
+@@ -125,6 +126,44 @@ class FrameToFrameOpticalFlow final : public OpticalFlowTyped<Scalar, Pattern> {
+     for (size_t i = 0; i < getNumCams(); i++) cells.at(i).setZero(h / c + 1, w / c + 1);
+   }
+ 
++  // Feature recall stores one multi-level image patch for every newly detected
++  // keypoint. Upstream never removes those patches, so a live VR session can
++  // consume tens of gigabytes. Keep every landmark the VIO still exposes to
++  // recall, plus a grace window for new keypoints still travelling through the
++  // pipeline. Everything older is unreachable and safe to discard.
++  static constexpr size_t RECALL_PATCH_CACHE_MAX = 16384;
++  static constexpr LandmarkId RECALL_PATCH_RECENT_GRACE = 4096;
++
++  void pruneRecallPatchCache() {
++    if (!config.optical_flow_recall_enable || patches.size() < RECALL_PATCH_CACHE_MAX) return;
++
++    std::unordered_set<LandmarkId> live_landmarks;
++    if (latest_lm_bundle) {
++      live_landmarks.reserve(latest_lm_bundle->lmids.size());
++      live_landmarks.insert(latest_lm_bundle->lmids.begin(), latest_lm_bundle->lmids.end());
++    }
++
++    const LandmarkId recent_floor = last_keypoint_id > RECALL_PATCH_RECENT_GRACE
++                                        ? last_keypoint_id - RECALL_PATCH_RECENT_GRACE
++                                        : 0;
++    const size_t before = patches.size();
++    for (auto it = patches.begin(); it != patches.end();) {
++      const bool recent = it->first >= recent_floor;
++      const bool live = live_landmarks.find(it->first) != live_landmarks.end();
++      if (!recent && !live) {
++        it = patches.erase(it);
++      } else {
++        ++it;
++      }
++    }
++
++    if (patches.size() != before) {
++      std::cout << "Basalt recall patch cache pruned " << before << " -> " << patches.size()
++                << " entries (live=" << live_landmarks.size() << ", grace="
++                << RECALL_PATCH_RECENT_GRACE << ")\n";
++    }
++  }
++
+   void processingLoop() override {
+     using std::make_shared;
+     OpticalFlowInput::Ptr img;
+@@ -151,6 +190,8 @@ class FrameToFrameOpticalFlow final : public OpticalFlowTyped<Scalar, Pattern> {
+ 
+       while (input_lm_bundle_queue.try_pop(latest_lm_bundle)) continue;
+ 
++      pruneRecallPatchCache();
++
+       if (!input_state_queue.empty()) {
+         while (input_state_queue.try_pop(latest_state)) continue;  // Flush
+         first_state_arrived = true;
+@@ -625,7 +666,9 @@ class FrameToFrameOpticalFlow final : public OpticalFlowTyped<Scalar, Pattern> {
+       if (config.optical_flow_recall_num_points_cell)
+         if (getCellCount(proj_pos, cam_id) >= config.optical_flow_detection_num_points_cell) continue;
+ 
+-      Eigen::aligned_vector<PatchT>& lm_patch = patches.at(lm_id);
++      auto patch_it = patches.find(lm_id);
++      if (patch_it == patches.end()) continue;
++      Eigen::aligned_vector<PatchT>& lm_patch = patch_it->second;
+       Eigen::AffineCompact2f curr_pose = proj_pose;
+       bool valid = trackPointFromPyrPatch(pyramid->at(cam_id), lm_patch, curr_pose);
+       if (!valid) continue;
+@@ -672,13 +715,14 @@ class FrameToFrameOpticalFlow final : public OpticalFlowTyped<Scalar, Pattern> {
+       const float response = kd.corner_responses[i];
+ 
+       if (config.optical_flow_recall_enable) {  // Save patch
+-        // TODO: Patches are never getting deleted
+-        Eigen::aligned_vector<PatchT>& p = patches[last_keypoint_id];
+-        Vector2 pos = corner.cast<Scalar>();
+-        for (int l = 0; l <= config.optical_flow_levels; l++) {
+-          Scalar scale = 1 << l;
+-          Vector2 pos_scaled = pos / scale;
+-          p.emplace_back(pyramid->at(0).lvl(l), pos_scaled);
++        if (patches.size() < RECALL_PATCH_CACHE_MAX) {
++          Eigen::aligned_vector<PatchT>& p = patches[last_keypoint_id];
++          Vector2 pos = corner.cast<Scalar>();
++          for (int l = 0; l <= config.optical_flow_levels; l++) {
++            Scalar scale = 1 << l;
++            Vector2 pos_scaled = pos / scale;
++            p.emplace_back(pyramid->at(0).lvl(l), pos_scaled);
++          }
+         }
+       }
+ 
+-- 
+2.47.3

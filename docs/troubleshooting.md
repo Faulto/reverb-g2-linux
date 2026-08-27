@@ -169,6 +169,39 @@ will not save a floor from a tilted, unstable, or implausible pose.
 If tracking has completely diverged, stop the whole VR session and start again in a
 well-lit room with visible detail.
 
+## `vrserver` is using several gigabytes of RAM
+
+This is not normal cache use. Basalt's feature-recall path used to save camera patches for
+every new landmark without ever removing old ones. Because the Monado driver runs inside
+SteamVR's `vrserver`, the leak appears under that process. A real front-camera-recall
+session reached 49 GB of private memory in about an hour.
+
+Patch 0014 keeps all landmarks the current VIO map can still recall, plus a recent grace
+window for work moving through the tracking pipeline. Old unreachable patches are pruned,
+and a hard 16,384-entry limit prevents unbounded growth. Rebuild Basalt after updating:
+
+```bash
+./scripts/setup-index-controllers.sh sources
+./scripts/setup-index-controllers.sh build
+```
+
+The launcher also starts an independent memory guard for every session. It warns halfway
+to the limit and stops VR after `vrserver` remains above 4 GB for three checks. On a machine
+with less RAM, half of physical memory becomes the limit instead. If clean shutdown hangs,
+the guard gives `vrserver` 10 seconds and then kills that exact process so the memory is
+actually returned.
+
+This is a last-resort safety net, not a tracking tweak. Relaunch VR normally after it
+closes. Check its state and recent messages with:
+
+```bash
+./scripts/beat-saber-index.sh diagnose
+tail -n 30 ~/.cache/reverb-g2/vrserver-memory-guard.log
+```
+
+Advanced users can lower or raise the requested limit for one launch with
+`G2_VRSERVER_MAX_RSS_MIB`; the minimum accepted value is 1024 MiB.
+
 ## Beat Saber is stuttering
 
 Check the game's SteamVR render resolution first. SteamVR sometimes chooses a very high
