@@ -112,7 +112,8 @@ show_connector() {
 }
 
 show_status() {
-    local version running installed source connector state failures=0 patch_file dkms_module
+    local version running installed source connector state failures=0 patch_file dkms_module=""
+    local disk_module relative cached_module boot_epoch disk_epoch
     local -a patch_files=()
     running="$(running_version || true)"
     installed="$(installed_version || true)"
@@ -161,6 +162,30 @@ show_status() {
         printf 'DKMS: %s\n' "$(dkms status "$dkms_module" -k "$KERNEL_VERSION" 2>/dev/null || printf 'not installed for this kernel')"
     else
         printf 'FAIL: dkms is not installed.\n' >&2
+        failures=$((failures + 1))
+    fi
+    disk_module="$(modinfo -k "$KERNEL_VERSION" -n nvidia_modeset 2>/dev/null || true)"
+    if [ -f "$disk_module" ]; then
+        boot_epoch="$(awk '$1 == "btime" { print $2; exit }' /proc/stat)"
+        disk_epoch="$(stat -c %Y "$disk_module")"
+        if [ -n "$running" ] && [ -n "$boot_epoch" ] && [ "$disk_epoch" -gt "$boot_epoch" ]; then
+            printf 'NOTICE: nvidia-modeset was installed after this boot. Reboot before testing; matching version numbers do not confirm the loaded patch.\n'
+        fi
+        while IFS= read -r relative; do
+            if [ "$source/$relative" -nt "$disk_module" ]; then
+                printf 'FAIL: installed nvidia-modeset predates patched source %s; force a DKMS build before installing.\n' "$relative" >&2
+                failures=$((failures + 1))
+            fi
+            for cached_module in /var/lib/dkms/"$dkms_module"/"$KERNEL_VERSION"/*/module/nvidia-modeset.ko*; do
+                [ -f "$cached_module" ] || continue
+                if [ "$source/$relative" -nt "$cached_module" ]; then
+                    printf 'FAIL: cached DKMS nvidia-modeset predates patched source %s; reinstalling the cache is insufficient.\n' "$relative" >&2
+                    failures=$((failures + 1))
+                fi
+            done
+        done < <(for patch_file in "${patch_files[@]}"; do sed -n 's|^--- a/||p' "$patch_file"; done | sort -u)
+    else
+        printf 'FAIL: nvidia-modeset is not installed for kernel %s.\n' "$KERNEL_VERSION" >&2
         failures=$((failures + 1))
     fi
     connector="$(show_connector 2>/dev/null || true)"
@@ -321,10 +346,19 @@ apply_patches() {
 
     printf '=== rebuilding NVIDIA %s for %s ===\n' "$version" "$KERNEL_VERSION"
     dkms_module="$(dkms_module_for_version "$version")"
-    dkms install --force "$dkms_module" -k "$KERNEL_VERSION"
+    rebuild_dkms_module "$dkms_module"
     refresh_initramfs
     printf '\nPatched modules and boot image are ready. Reboot manually before testing the G2.\n'
     printf 'This script never reboots automatically.\n'
+}
+
+rebuild_dkms_module() {
+    # install --force only reinstalls a cached build. Explicitly invalidate and
+    # rebuild it so changes in /usr/src reach the installed kernel module.
+    # Keep this error check explicit: never install the cached binary after a
+    # failed build, including when the caller uses this function in a condition.
+    dkms build --force "$1" -k "$KERNEL_VERSION" || return 1
+    dkms install --force "$1" -k "$KERNEL_VERSION"
 }
 
 check_initramfs() {
@@ -340,11 +374,13 @@ check_initramfs() {
     return 2
 }
 
-case "$ACTION" in
-    status) show_status ;;
-    validate) validate_patches ;;
-    apply) apply_patches ;;
-    initramfs-check) check_initramfs ;;
-    -h|--help) usage ;;
-    *) usage >&2; exit 2 ;;
-esac
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    case "$ACTION" in
+        status) show_status ;;
+        validate) validate_patches ;;
+        apply) apply_patches ;;
+        initramfs-check) check_initramfs ;;
+        -h|--help) usage ;;
+        *) usage >&2; exit 2 ;;
+    esac
+fi

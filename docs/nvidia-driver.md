@@ -70,8 +70,13 @@ then:
 4. rebuilds NVIDIA through DKMS for the current kernel; and
 5. refreshes the boot image with mkinitcpio, update-initramfs, or dracut.
 
-It rebuilds DKMS even if the source already contains every patch. This fixes the common
-case where `/usr/src` is correct but the installed module or boot image is stale.
+It explicitly runs `dkms build --force` before `dkms install --force`, even if the source
+already contains every patch. An install alone can reuse an old cached binary. The status
+check flags installed or cached modules older than the patched files.
+
+If you patched with an older launcher and still have black screens, run `apply` again with
+the updated launcher and reboot. Matching driver version numbers or matching boot-image
+and disk hashes alone do not prove that the source changes were compiled.
 
 The tool never reboots automatically. When it tells you to reboot, do that yourself and
 then run:

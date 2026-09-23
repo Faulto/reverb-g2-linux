@@ -44,8 +44,12 @@ jobs:
             scripts/vr-overlay-action.sh \
             scripts/install-control-panel.sh \
             scripts/nvidia-g2-patch-manager.sh \
+            scripts/test-nvidia-patch-manager.sh \
             scripts/sync-nvidia-initramfs.sh \
             scripts/vrserver-memory-guard.sh
+
+      - name: Check DKMS rebuild ordering and failure handling
+        run: bash scripts/test-nvidia-patch-manager.sh
 
       - name: Verify Monado patch series against pinned source
         run: |
