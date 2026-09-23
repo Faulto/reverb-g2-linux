@@ -6,7 +6,8 @@ Patches 0001–0003 originate from
 Ashish Kumar Singh for root-causing and fixing NVIDIA bug 5923212. See that repo for the
 long-form analysis. This copy corrects 0003's manufacturer-ID byte order and
 gates it on the G2 product ID. Patches 0004 and 0005 handle the G2's undefined
-EDID color depth.
+EDID color depth on 595/610. Patch 0006 ports those two color-depth changes to
+the refactored NVIDIA 615 source.
 
 What each does:
 
@@ -24,9 +25,11 @@ What each does:
 - **0005** — also raises the RGB minimum to 8 bpc for only that exact G2 EDID.
   On NVIDIA 610 this was required for a live 24-bpp attach and stable
   4320×2160 at 90 Hz.
+- **0006** — exact-context NVIDIA 615 port of 0004 and 0005. It treats an
+  undefined depth as unspecified and fixes the exact G2 RGB range at 8 bpc.
 
 Use `scripts/nvidia-g2-patch-manager.sh`: it discovers the installed open-module
-source tree, selects only the physically tested series for NVIDIA 595 or 610,
+source tree, selects the version-specific series for NVIDIA 595, 610 or 615,
 validates every hunk on a temporary mini-tree, backs up touched source files,
 rebuilds DKMS, and refreshes mkinitcpio, update-initramfs, or dracut. It refuses
 other driver families until somebody ports and physically verifies them. Never

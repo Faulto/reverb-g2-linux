@@ -257,7 +257,8 @@ See [NVIDIA driver updates](docs/nvidia-driver.md) for the longer explanation.
 
 The full playable setup has been tested on Arch Linux, Plasma Wayland, an RTX 5080, NVIDIA
 610 open modules, a G2 v1 cable, and Index controllers. The display patches were also tested
-on Debian with an RTX 3060 Ti and NVIDIA 595 open modules.
+on Debian with an RTX 3060 Ti and NVIDIA 595 open modules. NVIDIA 615.71.09 is source- and
+DKMS-verified, but still needs the post-reboot physical headset check.
 
 Arch, Debian/Ubuntu, and Fedora package installation is built in, but we still need more
 reports from other PCs. AMD, Intel, GNOME, current Ubuntu/Fedora versions, X11, and the G2

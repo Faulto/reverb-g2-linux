@@ -13,10 +13,12 @@ matching open-module source afterward, rebuilds DKMS, and updates the boot image
 |---|---|---|
 | NVIDIA open 595.71.05 | `0001` to `0005` | 4320×2160 combined at 90 Hz |
 | NVIDIA open 610.57.04 | `0003` to `0005` | 4320×2160 combined at 90 Hz |
+| NVIDIA open 615.71.09 | `0003` and `0006` | Source and DKMS verified; headset retest required after reboot |
 
-The manager knows the 595 and 610 driver families, but those two exact versions are the
-ones physically tested. A later point release may have changed NVIDIA's private NVKMS
-source or included part of the fix already.
+The manager knows the 595, 610 and 615 driver families. The 595 and 610 versions above have
+been physically tested in a headset. NVIDIA 615 changed the relevant NVKMS function, so it
+uses a separate exact-context port rather than applying the 610 patches with offsets and
+fuzz. A clean build still needs a real 90 Hz headset test after reboot.
 
 The script checks every patch hunk before editing anything. Even so, a clean patch and DKMS
 build do not prove that a new driver works. The final test is both G2 screens running

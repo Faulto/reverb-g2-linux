@@ -95,4 +95,5 @@ jobs:
           done <<'EOF'
           595.71.05 51edebee79919b54f498c19a0be31982cd97646e 000[1-5]-*.patch
           610.57.04 e4a5faa2567f28c8eabe0ebb6422b6d0abcf37eb 000[3-5]-*.patch
+          615.71.09 61dcc93722ecb418bb5f2e00923f05b4b8051dd1 000[36]-*.patch
           EOF

@@ -66,6 +66,13 @@ patch_list_for_version() {
                 [ -f "$patch" ] && printf '%s\n' "$patch"
             done
             ;;
+        615)
+            # 615 retains the max-link issue, but refactored the color-format
+            # function. 0006 is the exact 615 port of the 0004/0005 behavior.
+            for patch in "$PATCH_DIR"/000{3,6}-*.patch; do
+                [ -f "$patch" ] && printf '%s\n' "$patch"
+            done
+            ;;
         *) return 2 ;;
     esac
 }
@@ -126,7 +133,7 @@ show_status() {
     printf 'Running kernel: %s\n' "$KERNEL_VERSION"
     mapfile -t patch_files < <(patch_list_for_version "$version")
     if [ "${#patch_files[@]}" -eq 0 ]; then
-        printf 'FAIL: NVIDIA %s is outside the tested patch series (595.x and 610.x).\n' "$version" >&2
+        printf 'FAIL: NVIDIA %s is outside the supported patch series (595.x, 610.x and 615.x).\n' "$version" >&2
         printf 'Refusing to infer compatibility; port and physically retest the patches first.\n' >&2
         return 2
     fi
@@ -209,6 +216,7 @@ plan_and_apply_series() {
                 ;;
         esac
     done
+    return 0
 }
 
 refresh_initramfs() {
@@ -244,7 +252,7 @@ validate_patches() {
     }
     mapfile -t patch_files < <(patch_list_for_version "$version")
     [ "${#patch_files[@]}" -gt 0 ] || {
-        printf 'NVIDIA %s is outside the tested 595.x/610.x patch series.\n' "$version" >&2
+        printf 'NVIDIA %s is outside the supported 595.x/610.x/615.x patch series.\n' "$version" >&2
         return 1
     }
     work="$(mktemp -d -t g2-nvidia-validate.XXXXXX)"
@@ -273,7 +281,7 @@ apply_patches() {
     }
     mapfile -t patch_files < <(patch_list_for_version "$version")
     [ "${#patch_files[@]}" -gt 0 ] || {
-        printf 'NVIDIA %s is outside the tested 595.x/610.x patch series.\n' "$version" >&2
+        printf 'NVIDIA %s is outside the supported 595.x/610.x/615.x patch series.\n' "$version" >&2
         return 1
     }
 
