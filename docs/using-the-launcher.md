@@ -153,8 +153,9 @@ If a map freezes or the controllers load on the floor, click **Restart modded Be
 ```
 
 This keeps SteamVR, the floor, and Space Calibrator running. The direct launcher also avoids
-SteamVR's desktop view, which repeatedly crashed Steam on the test PC. Steam is started with
-`-pipewire`, but direct game launch is still the reliable route there.
+SteamVR's desktop view, which repeatedly crashed Steam on the test PC even with PipeWire
+capture enabled. VR startup leaves an existing Steam client running and only starts Steam
+normally when it is not already open.
 
 ## Audio
 

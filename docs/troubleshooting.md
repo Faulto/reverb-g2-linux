@@ -235,9 +235,10 @@ fails, stop the full session and recalibrate instead.
 ## Steam crashes when I open the VR desktop
 
 Use **Start VR + modded Beat Saber** instead of launching the game through SteamVR's desktop
-view. Desktop capture repeatedly crashed Steam on the test PC. The launcher starts Steam
-with PipeWire support and warns if Remote Play hosting is enabled, but direct game launch is
-still the dependable option on that machine.
+view. Desktop capture repeatedly crashed Steam on the test PC, including with the
+`-pipewire` option. Normal VR startup therefore leaves an existing Steam client alone and
+starts it without special capture flags only when needed. Direct game launch is still the
+dependable option on that machine.
 
 This may not affect every Linux desktop, so the launcher does not silently disable Remote
 Play or remove SteamVR features.

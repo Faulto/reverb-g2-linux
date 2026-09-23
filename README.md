@@ -132,9 +132,11 @@ check.
 
 ### SteamVR's desktop view crashes Steam
 
-This happened repeatedly on our test machine. The launcher starts Steam with PipeWire
-support, but the reliable option is to avoid the VR desktop and launch Beat Saber directly
-from this control panel. It also warns if Steam Remote Play hosting is enabled.
+This happened repeatedly on our test machine, including when Steam was started with
+PipeWire desktop capture enabled. The launcher now leaves an existing Steam session alone
+instead of restarting it with `-pipewire`. The reliable option is to avoid the VR desktop
+and launch Beat Saber directly from this control panel. It also warns if Steam Remote Play
+hosting is enabled.
 
 ### A Beat Saber map is stuck
 

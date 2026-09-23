@@ -485,13 +485,19 @@ start_memory_guard() {
         "$max_rss_mib" "$MEMORY_GUARD_LOG"
 }
 
-start_steam_client_pipewire() {
-    local env_name steam_command
+start_steam_client() {
+    local env_name steam_command use_pipewire="${1:-false}"
     local -a steam_env=()
     local -a direct_env=()
+    local -a steam_args=(-silent)
     steam_command="$(command -v steam 2>/dev/null || true)"
     [ -n "$steam_command" ] || die 'Steam command is not installed.'
-    printf 'Starting Steam with PipeWire desktop capture enabled...\n'
+    if [ "$use_pipewire" = true ]; then
+        steam_args=(-pipewire -silent)
+        printf 'Starting Steam with PipeWire desktop capture enabled...\n'
+    else
+        printf 'Steam is not running; starting it normally...\n'
+    fi
     # Use the distribution wrapper so Steam's 32-bit runtime libraries are configured. Keep it
     # in a user service so closing the launcher terminal cannot take Steam and SteamVR with it.
     # STEAM_CLIENT remains the inner executable used to identify the live client below.
@@ -509,10 +515,10 @@ start_steam_client_pipewire() {
             --property="StandardOutput=append:$STEAM_CLIENT_LOG" \
             --property="StandardError=append:$STEAM_CLIENT_LOG" \
             "${steam_env[@]}" \
-            "$steam_command" -pipewire -silent
+            "$steam_command" "${steam_args[@]}"
     else
         printf 'User systemd is unavailable; supervising Steam with a detached process.\n'
-        nohup env "${direct_env[@]}" "$steam_command" -pipewire -silent \
+        nohup env "${direct_env[@]}" "$steam_command" "${steam_args[@]}" \
             >>"$STEAM_CLIENT_LOG" 2>&1 &
     fi
     for _i in $(seq 1 240); do
@@ -524,7 +530,25 @@ start_steam_client_pipewire() {
         fi
         sleep 0.25
     done
-    printf 'Steam did not become ready with -pipewire within 60 seconds; inspect %s\n' "$STEAM_CLIENT_LOG" >&2
+    printf 'Steam did not become ready within 60 seconds; inspect %s\n' "$STEAM_CLIENT_LOG" >&2
+    return 1
+}
+
+ensure_steam_client() {
+    if ! steam_client_running; then
+        start_steam_client false
+        return
+    fi
+
+    printf 'Steam client is already running; leaving it open.\n'
+    for _i in $(seq 1 240); do
+        if pgrep -x steamwebhelper >/dev/null; then
+            return 0
+        fi
+        sleep 0.25
+    done
+    printf 'Steam is running but its UI services did not become ready within 60 seconds.\n' >&2
+    printf 'Restart Steam manually, then run the VR launcher again.\n' >&2
     return 1
 }
 
@@ -551,7 +575,7 @@ restart_steam_client_pipewire() {
         fi
     fi
 
-    start_steam_client_pipewire
+    start_steam_client true
 }
 
 find_g2_audio_name() {
@@ -926,7 +950,7 @@ start_session() {
     fi
 
     stop_vr_processes
-    restart_steam_client_pipewire
+    ensure_steam_client
     register_drivers
 
     if ! timeout 12s python3 "$REPO/scripts/panel.py" activate; then
